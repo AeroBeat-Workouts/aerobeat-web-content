@@ -3,15 +3,15 @@
 /**
  * Stable browser content runtime service identity.
  *
- * @type {"aero.content.runtime"}
+ * @type {"aero.content.library"}
  */
-export const aeroContentServiceId = "aero.content.runtime";
+export const aeroContentServiceId = "aero.content.library";
 
 /**
  * @typedef {Object} AeroContentRuntimeFoundationMarker
  * @property {"aero.content.runtime.foundation"} schema Foundation marker schema.
  * @property {1} version Foundation marker version.
- * @property {"aero.content.runtime"} serviceId Runtime service identity reserved by this package.
+ * @property {"aero.content.library"} serviceId Canonical content-library service identity from web contracts.
  * @property {false} domainBehaviorImplemented Whether package loading and resolution behavior exists in this scaffold.
  */
 

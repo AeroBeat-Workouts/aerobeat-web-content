@@ -12,7 +12,7 @@ This repository does not own canonical authored-content semantics, BeatSaver acq
 
 ## Public API Surface
 
-- `src/index.js` exports the `aero.content.runtime` service identity and a frozen foundation marker.
+- `src/index.js` exports the canonical `aero.content.library` service identity from `@aerobeat/web-contracts` and a package-local frozen foundation marker.
 - Future runtime APIs must use documented immutable shapes from public `@aerobeat/web-contracts` exports and must narrow external package data before exposing it.
 - No content loader, validator, variant resolver, or asset fetcher is implemented in this scaffold.
 
