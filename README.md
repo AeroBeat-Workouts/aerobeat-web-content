@@ -4,11 +4,11 @@ Browser song-package loading and runtime content service for AeroBeat Web.
 
 ## Responsibility
 
-This repository owns the browser runtime boundary for acquiring, narrowing, validating, and resolving playable AeroBeat song-package content. Its future implementation will expose immutable package/chart/variant snapshots, verify declared hashes, report asset and CORS capability truth, preserve source lineage, and resolve modifier or paused future-target variant selections without rewriting judged history.
+This repository owns the browser runtime boundary for acquiring, narrowing, validating, and resolving playable AeroBeat song-package content. Its future implementation will expose immutable package/chart/variant snapshots, verify declared hashes, report asset and CORS capability truth, preserve source lineage, resolve authored persistence handles supplied by the browser authoring owner, and resolve modifier or paused future-target variant selections without rewriting judged history. Resolving a persistence handle does not make this package the persistence implementation or write authority.
 
 The current slice is intentionally a package foundation only. It establishes the public package, validation posture, testbed layout, and service identity; Task 5 of the cross-repo prototype plan will implement runtime domain behavior.
 
-This repository does not own canonical authored-content semantics, BeatSaver acquisition or conversion, audio playback, camera/CV, pose input, gameplay judgement or scoring, rendering, UI components, environment drawing, or assembly wiring.
+This repository does not own canonical authored-content semantics, BeatSaver acquisition or conversion, authored persistence or export, audio playback, camera/CV, pose input, gameplay judgement or scoring, rendering, UI components, environment drawing, or assembly wiring.
 
 ## Public API Surface
 
@@ -18,8 +18,10 @@ This repository does not own canonical authored-content semantics, BeatSaver acq
 
 ## Adjacent Repositories
 
-- `aerobeat-content-core` owns canonical durable song-package and chart semantics.
-- `aerobeat-tool-content-authoring` and `aerobeat-vendor-beatsaver` own source acquisition and offline conversion.
+- `aerobeat-content-core` remains the canonical Godot donor for durable song-package and chart semantics.
+- `aerobeat-tool-content-authoring` and `aerobeat-vendor-beatsaver` remain offline Godot donor/reference implementations for conversion and BeatSaver acquisition; they do not own the browser runtime path.
+- `aerobeat-web-vendor-beatsaver` owns browser BeatSaver acquisition and normalized source manifests.
+- `aerobeat-web-content-authoring` owns browser conversion, authored persistence, and export; this package only resolves the persistence handles it publishes.
 - `aerobeat-web-contracts` owns shared browser service IDs and content/message shapes.
 - `aerobeat-web-audio` owns playback and clock truth.
 - `aerobeat-web-video` owns browser media lifecycle.
