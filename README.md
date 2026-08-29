@@ -1,70 +1,97 @@
 # aerobeat-web-content
 
-Browser song-package loading and runtime content service for AeroBeat Web.
+Validated browser song-package loading and runtime variant resolution for AeroBeat Web.
 
 ## Responsibility
 
-This repository owns the browser runtime boundary for acquiring, narrowing, validating, and resolving playable AeroBeat song-package content. Its future implementation will expose immutable package/chart/variant snapshots, verify declared hashes, report asset and CORS capability truth, preserve source lineage, resolve authored persistence handles supplied by the browser authoring owner, and resolve modifier or paused future-target variant selections without rewriting judged history. Resolving a persistence handle does not make this package the persistence implementation or write authority.
+`@aerobeat/web-content` owns one `AeroContentRuntime` per connected game. It narrows untrusted package data, verifies package/chart/audio hashes, resolves direct packages, arbitrary CORS-readable URLs, deterministic `AEROPKG1` exports, and injected authored persistence handles, then exposes immutable serializable package, asset-capability, variant, and resolved-event snapshots.
 
-The current slice is intentionally a package foundation only. It establishes the public package, validation posture, testbed layout, and service identity; Task 5 of the cross-repo prototype plan will implement runtime domain behavior.
+The runtime is not a map allowlist. Any package satisfying the current package, hash, asset, lineage, recipe, and ruleset contracts can load.
 
-This repository does not own canonical authored-content semantics, BeatSaver acquisition or conversion, authored persistence or export, audio playback, camera/CV, pose input, gameplay judgement or scoring, rendering, UI components, environment drawing, or assembly wiring.
+This package does **not** own BeatSaver acquisition, source ZIP inspection, conversion, persistence writes, export creation, playback, scoring, rendering, UI, camera/CV, or iframe transport. Raw ZIPs, audio bytes, `Blob`, provider DTOs, media tracks, frames, and pixels never appear in snapshots.
 
-## Public API Surface
+## Public API
 
-- `src/index.js` exports the canonical `aero.content.library` service identity from `@aerobeat/web-contracts` and a package-local frozen foundation marker.
-- Future runtime APIs must use documented immutable shapes from public `@aerobeat/web-contracts` exports and must narrow external package data before exposing it.
-- No content loader, validator, variant resolver, or asset fetcher is implemented in this scaffold.
+```js
+import { createAeroContentRuntime } from "@aerobeat/web-content";
 
-## Adjacent Repositories
+const runtime = createAeroContentRuntime({
+  persistenceResolver: {
+    loadPackage: (handle) => authoring.loadPackage(handle),
+    readAsset: (handle, path) => authoring.readAsset(handle, path),
+    exportPackage: (handle) => authoring.exportPackage(handle)
+  }
+});
 
-- `aerobeat-content-core` remains the canonical Godot donor for durable song-package and chart semantics.
-- `aerobeat-tool-content-authoring` and `aerobeat-vendor-beatsaver` remain offline Godot donor/reference implementations for conversion and BeatSaver acquisition; they do not own the browser runtime path.
-- `aerobeat-web-vendor-beatsaver` owns browser BeatSaver acquisition and normalized source manifests.
-- `aerobeat-web-content-authoring` owns browser conversion, authored persistence, and export; this package only resolves the persistence handles it publishes.
-- `aerobeat-web-contracts` owns shared browser service IDs and content/message shapes.
-- `aerobeat-web-audio` owns playback and clock truth.
-- `aerobeat-web-video` owns browser media lifecycle.
-- `aerobeat-web-gameplay` consumes resolved immutable charts and variants.
-- `aerobeat-web-renderer` and `aerobeat-web-ui` present runtime state without loading content.
-- `aerobeat-web-assembly` composes the concrete runtime service.
+await runtime.loadPersistenceHandle(authoredHandle);
+const snapshot = runtime.getSnapshot();
+```
+
+Public exports:
+
+- `createAeroContentRuntime(options)`
+- `validateRuntimePackage(package, options)`
+- `composeRuntimeVariant(base, modifiers, packageId)`
+- `aeroContentRuntimeCapabilities`
+- `aeroContentRuntimeDescriptor`
+- canonical `aeroContentServiceId` (`aero.content.library`)
+
+Per-instance runtime operations:
+
+- `loadPackage(packageOrWrapper, options)`
+- `loadExternalPackage(url, options)`
+- `loadPersistenceHandle(handle, options)`
+- `reload()`
+- `selectVariant(variantId, { modifierIds })`
+- `setPlaybackState(state)`
+- `swapFutureVariant(variantId, { modifierIds })`
+- `readAsset(path)`
+- `getSnapshot()` / `subscribe(listener)`
+- `getCapabilities()` / `destroy()`
+
+Direct wrappers use `{ package, packageHash?, assets }`. Asset descriptors use `{ path, kind?, hash?, url?, bytes?, critical? }`. Raw bytes are accepted only by explicit load/read boundaries and are copied; they never enter public state.
+
+## Integrity and Asset Policy
+
+- Package data must be plain enumerable JSON-like data with bounded depth, item count, strings, and no cycles, accessors, class instances, symbols, non-finite numbers, or hidden fields.
+- The current package schema is `aerobeat.song-package.v1` with exactly one Flow chart and the frozen four-chart Boxing recipe/ruleset matrix.
+- Boxing chart hashes are recomputed from beats, recipe, ruleset, and source hash. Declared package and audio hashes are recomputed and compared.
+- Audio and explicitly critical assets block readiness on absence, CORS/readability failure, or hash mismatch.
+- Background failure is cosmetic and produces an explicit CSS fallback with degradation truth.
+- External package/asset URLs require HTTPS, except localhost HTTP for development. Fetch uses CORS mode and omits credentials.
+- `AEROPKG1` parsing validates metadata framing, contiguous bounded ranges, duplicate/canonical paths, trailing bytes, and every asset SHA-256.
+
+Package environment/theme data remains an optional suggestion. Host precedence is `default < playlist < song < athlete`; runtime content never overrides a valid host selection.
+
+## Variants and Paused Swaps
+
+The catalog is frozen to Flow plus:
+
+- Semantic Track · Row Family
+- Spatial Grid · Row Family
+- Semantic Track · Cut Family
+- Spatial Grid · Cut Family
+
+Supported modifiers are `no_squats`, `no_weaves`, `any_punch`, `crossed_guard`, and `cross_body`. Effective identity is the sorted unique union of authored/emitted and requested modifiers. Runtime composites are always unranked and carry explicit base/requested/effective provenance.
+
+A future-target swap is accepted only while paused. Events before the paused position and events identified as judged or active retain their exact frozen object identity. Only non-overlapping future targets are replaced; content runtime never rewrites gameplay score or judgement history. Selection and future swapping are rejected while running.
+
+## Persistence Boundary
+
+Persistence access is dependency-injected. The runtime imports no browser-authoring implementation. For the current authored format it prefers the resolver's public `exportPackage(handle)` seam, which carries the `AEROPKG1` hash table; the fallback `loadPackage`/`readAsset` seam requires externally supplied asset hashes. Reloading a deleted or invalidated handle clears playable state and reports the resolver failure.
 
 ## Allowed Imports
 
-Runtime code may import documented public exports from `@aerobeat/web-contracts`. It must not import sibling `src/`, `internal`, testbed, vendor-native, Godot runtime, authoring implementation, gameplay, renderer, UI, audio, video, or assembly internals.
-
-Testbed code imports this package through the generated `.testbed/node_modules/@aerobeat/web-this-repo` symlink. Add sibling packages only as declared public dependencies.
-
-## Runtime Data Posture
-
-- Treat downloaded packages, manifests, chart data, URLs, and host-provided configuration as untrusted external values.
-- Preserve declared hashes, recipe/ruleset identity, source-event lineage, and capability failures rather than silently repairing data.
-- Browser content snapshots will be serializable and immutable at public boundaries.
-- Raw camera frames, media tracks, scoring state, and renderer objects never belong in content snapshots.
-- Cosmetic asset failure may eventually fall back; gameplay-critical chart/audio failure must remain explicit.
-
-## Testbed Shape
-
-The hidden `.testbed/` owns browser demos, scenes, debug data, test setup, Playwright configuration, and generated local package links. Create the self-link with:
-
-```bash
-npm run testbed:link-self
-```
-
-Do not commit `node_modules` or generated testbed symlinks.
+Runtime source imports only documented public exports from `@aerobeat/web-contracts` and local modules. It must not import sibling `src/`, `internal`, testbed, vendor, Godot, authoring, gameplay, renderer, UI, audio, video, or assembly internals.
 
 ## Validation
-
-Run before handoff:
 
 ```bash
 npm run check
 npm test
 npm run test:browser
+npm pack --dry-run --json
+git diff --check
 ```
 
-The scaffold checks strict `// @ts-check` and no-JSDoc-escape posture, public import boundaries, named-component scene rules, Playwright console warning/error posture, deterministic public marker exports, and deterministic browser-testbed structure.
-
-## Documentation Handoff
-
-Keep repository implementation decisions under `docs/decisions/`. Public product or contributor documentation belongs in `aerobeat-web-docs` after contracts are accepted.
+Unit coverage includes package/chart/audio hashes, arbitrary external URLs, critical CORS failure, cosmetic fallback, direct and authored persistence loading, deleted-handle invalidation, modifier composition, stable lineage, future-only paused swaps, active-object preservation, unranked provenance, listener/generation/destroy safety, and multi-instance isolation. Chromium coverage loads a real runtime package through Web Crypto and verifies isolated instances with zero console warnings/errors.

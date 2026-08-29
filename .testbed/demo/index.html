@@ -3,10 +3,18 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>AeroBeat Web Content Foundation</title>
+    <title>AeroBeat Web Content Runtime</title>
+    <script type="importmap">
+      {
+        "imports": {
+          "@aerobeat/web-this-repo": "/src/index.js",
+          "@aerobeat/web-contracts": "/node_modules/@aerobeat/web-contracts/src/index.js"
+        }
+      }
+    </script>
   </head>
   <body>
-    <aero-content-foundation></aero-content-foundation>
+    <aero-content-runtime></aero-content-runtime>
     <script type="module" src="./main.js"></script>
   </body>
 </html>
