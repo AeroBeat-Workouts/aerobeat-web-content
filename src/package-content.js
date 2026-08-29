@@ -5,7 +5,7 @@ import {
   mapModifierIds,
   rulesetIds
 } from "@aerobeat/web-contracts";
-import { canonicalJson, cloneFrozenData, dataError, isPlainDataRecord, sha256Hex } from "./runtime-data.js";
+import { canonicalJson, cloneFrozenData, dataError, hasExactDataKeys, isPlainDataRecord, sha256Hex } from "./runtime-data.js";
 
 /** @typedef {Readonly<Record<string, unknown>>} DataRecord */
 /** @typedef {Readonly<{variantId: string, chartId: string, mode: "flow" | "boxing", rulesetId: string, recipeId: string | null, modifierIds: readonly string[], ranked: boolean, mapHash: Readonly<Record<string, unknown>>, scoreIdentityHash: Readonly<Record<string, unknown>>, provenance: Readonly<Record<string, unknown>>, chart: DataRecord}>} RuntimeVariant */
@@ -62,6 +62,7 @@ export async function validateRuntimePackage(packageValue, options = {}) {
       if (options.supportedRulesetIds && !options.supportedRulesetIds.includes(rulesetId)) throw dataError("ruleset_unavailable", `Ruleset ${rulesetId} is unavailable`);
       if (options.supportedRecipeIds && !options.supportedRecipeIds.includes(recipeId)) throw dataError("recipe_unavailable", `Recipe ${recipeId} is unavailable`);
       modifierIds = normalizeModifiers(prototype.modifiers);
+      validateEventModifierIdentity(beats, modifierIds);
       const sourceHash = requireHashString(prototype.sourceHash, "source_hash_invalid");
       declaredChartHash = requireHashString(prototype.contentHash, "chart_hash_invalid").slice(7);
       const actualChartHash = await sha256Hex(canonicalJson({ beats, recipeId, rulesetId, sourceHash: `sha256:${sourceHash.slice(7)}` }));
@@ -189,6 +190,7 @@ function validateSets(setsValue, chartIds) {
 /** @param {readonly unknown[]} beats @param {boolean} boxing */
 function validateEvents(beats, boxing) {
   const ids = new Set();
+  const lineageOwners = new Set();
   for (let index = 0; index < beats.length; index += 1) {
     const beat = requireRecord(beats[index], "event_invalid");
     if (!Number.isFinite(beat.start) || Number(beat.start) < 0 || typeof beat.type !== "string" || beat.type.length === 0) throw dataError("event_shape_invalid", `Event ${index} is invalid`);
@@ -196,7 +198,9 @@ function validateEvents(beats, boxing) {
     const eventId = requireString(beat.eventId, "event_identity_invalid");
     if (ids.has(eventId)) throw dataError("event_identity_duplicate", "Boxing event IDs must be unique");
     ids.add(eventId);
-    if (!Array.isArray(beat.sourceEventIds) || beat.sourceEventIds.length === 0 || beat.sourceEventIds.some((entry) => typeof entry !== "string" || entry.length === 0)) throw dataError("event_lineage_invalid", "Boxing event lineage is required");
+    if (!Array.isArray(beat.sourceEventIds) || beat.sourceEventIds.length === 0 || beat.sourceEventIds.length > 64 || beat.sourceEventIds.some((entry) => typeof entry !== "string" || entry.length === 0 || entry.length > 512) || new Set(beat.sourceEventIds).size !== beat.sourceEventIds.length) throw dataError("event_lineage_invalid", "Boxing event lineage is required and must be unique");
+    if (beat.sourceEventIds.some((entry) => lineageOwners.has(entry))) throw dataError("event_lineage_duplicate", "Source event lineage cannot identify multiple authored targets");
+    for (const entry of beat.sourceEventIds) lineageOwners.add(entry);
   }
 }
 
@@ -218,9 +222,28 @@ function requireString(value, code) { if (typeof value !== "string" || value.len
 /** @param {unknown} value @param {string} code @returns {string} */
 function requireHashString(value, code) { if (typeof value !== "string" || !/^sha256:[0-9a-f]{64}$/u.test(value)) throw dataError(code, "Expected a lowercase SHA-256 hash"); return value; }
 /** @param {unknown} value @returns {string} */
-function normalizeDeclaredHash(value) { if (value === null || value === undefined) return ""; if (typeof value === "string") return /^sha256:[0-9a-f]{64}$/u.test(value) ? value.slice(7) : ""; if (isPlainDataRecord(value) && value.algorithm === "sha256" && typeof value.value === "string" && /^[0-9a-f]{64}$/u.test(value.value)) return value.value; throw dataError("package_hash_invalid", "Declared package hash is invalid"); }
+function normalizeDeclaredHash(value) { if (value === null || value === undefined) return ""; if (typeof value === "string") { if (!/^sha256:[0-9a-f]{64}$/u.test(value)) throw dataError("package_hash_invalid", "Declared package hash is invalid"); return value.slice(7); } if (hasExactDataKeys(value, ["schema", "version", "algorithm", "value"]) && value.schema === "aerobeat/content_hash" && value.version === 1 && value.algorithm === "sha256" && typeof value.value === "string" && /^[0-9a-f]{64}$/u.test(value.value)) return value.value; throw dataError("package_hash_invalid", "Declared package hash is invalid"); }
 /** @param {unknown} value @returns {string[]} */
-function normalizeModifiers(value) { if (!Array.isArray(value)) throw dataError("modifiers_invalid", "Modifiers must be an array"); const result = [...new Set(value.map((entry) => String(entry)))].sort(); if (result.some((entry) => !mapModifierIds.includes(/** @type {"no_squats" | "no_weaves" | "any_punch" | "crossed_guard" | "cross_body"} */ (entry)))) throw dataError("modifier_invalid", "Modifier is unsupported"); return result; }
+function normalizeModifiers(value) {
+  if (!Array.isArray(value) || value.length > mapModifierIds.length || value.some((entry) => typeof entry !== "string")) throw dataError("modifiers_invalid", "Modifiers must be a bounded string array");
+  const result = [...new Set(value)].sort();
+  if (result.some((entry) => !mapModifierIds.includes(/** @type {"no_squats" | "no_weaves" | "any_punch" | "crossed_guard" | "cross_body"} */ (entry)))) throw dataError("modifier_invalid", "Modifier is unsupported");
+  return result;
+}
+/** @param {readonly unknown[]} beats @param {readonly string[]} identity */
+function validateEventModifierIdentity(beats, identity) {
+  for (const value of beats) {
+    const beat = requireRecord(value, "event_invalid");
+    const emitted = [];
+    if (beat.modifier !== undefined && beat.modifier !== null) emitted.push(beat.modifier);
+    if (beat.runtimeModifiers !== undefined) {
+      if (!Array.isArray(beat.runtimeModifiers)) throw dataError("event_modifier_invalid", "Event runtimeModifiers must be an array");
+      emitted.push(...beat.runtimeModifiers);
+    }
+    if (emitted.some((entry) => typeof entry !== "string" || !identity.includes(entry))) throw dataError("event_modifier_not_in_identity", "Every emitted event modifier must be declared in chart identity");
+    if (beat.type === "guard" && isPlainDataRecord(beat.guardTarget) && beat.guardTarget.crossed === true && !identity.includes("crossed_guard")) throw dataError("crossed_guard_identity_missing", "Crossed guard events require crossed_guard chart identity");
+  }
+}
 /** @param {string} value */
 function contentHash(value) { return Object.freeze({ schema: "aerobeat/content_hash", version: 1, algorithm: "sha256", value }); }
 /** @param {unknown} value @returns {unknown} */

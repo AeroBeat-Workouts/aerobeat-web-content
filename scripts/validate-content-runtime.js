@@ -69,6 +69,18 @@ runtime.setPlaybackState({ state: "running", positionMs: 1250 });
 await assert.rejects(() => runtime.swapFutureVariant(boxing.variantId), hasCode("variant_swap_not_paused"));
 await assert.rejects(() => runtime.selectVariant(boxing.variantId), hasCode("variant_swap_running"));
 
+const boundaryRuntime = createAeroContentRuntime();
+await boundaryRuntime.loadPackage({ package: basePackage, assets: [{ path: "song.ogg", bytes: audioBytes }] });
+await boundaryRuntime.selectVariant(boxing.variantId);
+const boundaryOld = boundaryRuntime.getSnapshot().resolvedEvents;
+boundaryRuntime.setPlaybackState({ state: "paused", positionMs: 1000 });
+await boundaryRuntime.swapFutureVariant(cut.variantId);
+const boundaryNew = boundaryRuntime.getSnapshot().resolvedEvents;
+assert.equal(boundaryNew.includes(boundaryOld.find((event) => event.centerTimestampMs === 500)), true);
+assert.equal(boundaryNew.includes(boundaryOld.find((event) => event.centerTimestampMs === 1000)), false);
+await boundaryRuntime.swapFutureVariant(boxing.variantId);
+assert.equal(boundaryRuntime.getSnapshot().resolvedEvents.includes(boundaryOld.find((event) => event.centerTimestampMs === 500)), true);
+
 const cosmeticPackage = structuredClone(basePackage);
 cosmeticPackage.presentationSuggestion = { background: { schema: "aerobeat/background_suggestion", version: 1, source: "song", kind: "image", url: "https://assets.example.invalid/background.webp", hash: null, themeId: null } };
 const cosmeticRuntime = createAeroContentRuntime({ fetch: async () => { throw new TypeError("CORS denied"); } });
@@ -82,6 +94,7 @@ await precedenceRuntime.loadPackage({ package: cosmeticPackage, assets: [{ path:
 assert.equal(precedenceRuntime.getSnapshot().background.url, hostBackground.url);
 
 await assert.rejects(() => createAeroContentRuntime().loadPackage({ package: basePackage, packageHash: `sha256:${"0".repeat(64)}`, assets: [{ path: "song.ogg", bytes: audioBytes }] }), hasCode("package_hash_mismatch"));
+await assert.rejects(() => createAeroContentRuntime().loadPackage({ package: basePackage, packageHash: "not-a-hash", assets: [{ path: "song.ogg", bytes: audioBytes }] }), hasCode("package_hash_invalid"));
 const badAudioRuntime = createAeroContentRuntime();
 await assert.rejects(() => badAudioRuntime.loadPackage({ package: basePackage, assets: [{ path: "song.ogg", bytes: new Uint8Array([1, 2, 3]) }] }), hasCode("asset_hash_mismatch"));
 assert.equal(badAudioRuntime.getSnapshot().state, "error");
@@ -116,6 +129,16 @@ await assert.rejects(() => persistenceRuntime.reload(), hasCode("package_not_fou
 assert.equal(persistenceRuntime.getSnapshot().state, "error");
 assert.equal(persistenceRuntime.getSnapshot().packageId, null);
 
+let releaseResolver;
+const delayedResolver = new Promise((resolve) => { releaseResolver = resolve; });
+const resolverRace = createAeroContentRuntime({ persistenceResolver: { async exportPackage() { await delayedResolver; return exportBytes; } } });
+const staleResolverLoad = resolverRace.loadPersistenceHandle(handle);
+const staleResolverRejected = assert.rejects(() => staleResolverLoad, hasCode("operation_aborted"));
+await resolverRace.loadPackage({ package: basePackage, assets: [{ path: "song.ogg", bytes: audioBytes }] });
+await staleResolverRejected;
+releaseResolver();
+assert.equal(resolverRace.getSnapshot().state, "ready");
+
 const isolatedA = createAeroContentRuntime();
 const isolatedB = createAeroContentRuntime();
 await Promise.all([
@@ -142,6 +165,60 @@ releaseFirst();
 await assert.rejects(() => first, hasCode("operation_aborted"));
 await second;
 assert.equal(replacing.getSnapshot().source.id, "https://example.invalid/second.json");
+
+// Adversarial public-boundary narrowing must not execute getters or coercion hooks.
+let executed = false;
+const accessorOptions = {};
+Object.defineProperty(accessorOptions, "fetch", { enumerable: true, get() { executed = true; throw new Error("getter executed"); } });
+assert.throws(() => createAeroContentRuntime(accessorOptions), hasCode("runtime_options_invalid"));
+assert.equal(executed, false);
+const hostileModifier = { toString() { executed = true; return "no_squats"; } };
+await assert.rejects(() => isolatedB.selectVariant(boxing.variantId, { modifierIds: [hostileModifier] }), hasCode("modifiers_invalid"));
+assert.equal(executed, false);
+const hostilePlayback = {};
+Object.defineProperty(hostilePlayback, "state", { enumerable: true, get() { executed = true; return "paused"; } });
+assert.throws(() => isolatedB.setPlaybackState(hostilePlayback), hasCode("playback_state_invalid"));
+assert.equal(executed, false);
+
+// Persisted path lists are strict and bounded; entries cannot coerce arbitrary objects.
+const fallbackResolver = createAeroContentRuntime({ persistenceResolver: {
+  async loadPackage() { return { package: basePackage, assetPaths: [{ toString() { executed = true; return "song.ogg"; } }] }; },
+  async readAsset() { return audioBytes; }
+} });
+await assert.rejects(() => fallbackResolver.loadPersistenceHandle(handle, { assetHashes: { "song.ogg": audioHash } }), hasCode("asset_path_invalid"));
+assert.equal(executed, false);
+
+// Package-owned abort and timeout races settle even when injected fetch ignores signals.
+const ignoredFetch = createAeroContentRuntime({ timeoutMs: 10, fetch: async () => new Promise(() => {}) });
+await assert.rejects(() => ignoredFetch.loadExternalPackage("https://ignored.example/package.json"), hasCode("fetch_timeout"));
+const replacedIgnored = createAeroContentRuntime({ timeoutMs: 1_000, fetch: async (url) => {
+  if (String(url).includes("never")) return new Promise(() => {});
+  if (String(url).endsWith("song.ogg")) return new Response(audioBytes, { status: 200 });
+  return new Response(JSON.stringify({ package: basePackage, assets: [{ path: "song.ogg", url: "https://replace.example/song.ogg", hash: audioHash }] }), { status: 200 });
+} });
+const never = replacedIgnored.loadExternalPackage("https://replace.example/never.json");
+const neverRejected = assert.rejects(() => never, hasCode("operation_aborted"));
+await replacedIgnored.loadExternalPackage("https://replace.example/current.json");
+await neverRejected;
+
+// Declared package lengths and exact AEROPKG metadata fail closed.
+const oversizedResponse = createAeroContentRuntime({ maximumPackageBytes: 64, fetch: async () => new Response("{}", { status: 200, headers: { "content-length": "65" } }) });
+await assert.rejects(() => oversizedResponse.loadExternalPackage("https://length.example/package.json"), hasCode("package_too_large"));
+const extraMetadataExport = rewriteAeroMetadata(exportBytes, (metadata) => ({ ...metadata, unexpected: true }));
+const archiveRuntime = createAeroContentRuntime({ persistenceResolver: { async exportPackage() { return { bytes: extraMetadataExport }; } } });
+await assert.rejects(() => archiveRuntime.loadPersistenceHandle(handle), hasCode("aeropkg_schema_invalid"));
+const overflowExport = rewriteAeroMetadata(exportBytes, (metadata) => ({ ...metadata, assets: [{ ...metadata.assets[0], byteLength: Number.MAX_SAFE_INTEGER }] }));
+const overflowRuntime = createAeroContentRuntime({ persistenceResolver: { async exportPackage() { return overflowExport; } } });
+await assert.rejects(() => overflowRuntime.loadPersistenceHandle(handle), hasCode("aeropkg_asset_range_invalid"));
+const noncanonicalExport = rewriteAeroMetadata(exportBytes, (metadata) => ({ ...metadata, assets: [{ ...metadata.assets[0], path: "SONG\\song.ogg" }] }));
+const noncanonicalRuntime = createAeroContentRuntime({ persistenceResolver: { async exportPackage() { return noncanonicalExport; } } });
+await assert.rejects(() => noncanonicalRuntime.loadPersistenceHandle(handle), hasCode("aeropkg_asset_path_noncanonical"));
+
+// Emitted modifiers are part of chart identity, not hidden per-event state.
+const hiddenModifier = structuredClone(basePackage);
+hiddenModifier.charts[0].beats[0].modifier = "crossed_guard";
+hiddenModifier.charts[0].prototype.contentHash = `sha256:${hashJson({ beats: hiddenModifier.charts[0].beats, recipeId: hiddenModifier.charts[0].prototype.recipeId, rulesetId: hiddenModifier.charts[0].prototype.rulesetId, sourceHash: hiddenModifier.charts[0].prototype.sourceHash })}`;
+await assert.rejects(() => createAeroContentRuntime().loadPackage({ package: hiddenModifier, assets: [{ path: "song.ogg", bytes: audioBytes }] }), hasCode("event_modifier_not_in_identity"));
 
 console.log("Content runtime unit checks passed.");
 
@@ -182,5 +259,7 @@ async function makePackage(declaredAudioHash) {
     recipeDefinitions: [], rulesetDefinitions: [], conversionTrace: {}, presentationSuggestion: null
   };
 }
+/** @param {Uint8Array} bytes @param {(metadata: Record<string, unknown>) => Record<string, unknown>} transform */
+function rewriteAeroMetadata(bytes, transform) { const originalLength = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(8, true); const original = /** @type {Record<string, unknown>} */ (JSON.parse(new TextDecoder().decode(bytes.slice(12, 12 + originalLength)))); const metadata = new TextEncoder().encode(canonical(transform(original))); const payload = bytes.slice(12 + originalLength); const output = new Uint8Array(12 + metadata.byteLength + payload.byteLength); output.set(new TextEncoder().encode("AEROPKG1")); new DataView(output.buffer).setUint32(8, metadata.byteLength, true); output.set(metadata, 12); output.set(payload, 12 + metadata.byteLength); return output; }
 /** @param {Record<string, unknown>} packageRecord @param {string} declaredPackageHash @param {readonly {path: string, bytes: Uint8Array, hash: string}[]} entries */
 function makeAeroPackage(packageRecord, declaredPackageHash, entries) { let offset = 0; const table = entries.map((entry) => { const row = { path: entry.path, offset, byteLength: entry.bytes.byteLength, sha256: entry.hash }; offset += entry.bytes.byteLength; return row; }); const metadata = new TextEncoder().encode(canonical({ schema: "aerobeat/authored_package_export", version: 1, packageHash: `sha256:${declaredPackageHash}`, package: packageRecord, assets: table })); const bytes = new Uint8Array(12 + metadata.byteLength + offset); bytes.set(new TextEncoder().encode("AEROPKG1")); new DataView(bytes.buffer).setUint32(8, metadata.byteLength, true); bytes.set(metadata, 12); let cursor = 12 + metadata.byteLength; for (const entry of entries) { bytes.set(entry.bytes, cursor); cursor += entry.bytes.byteLength; } return bytes; }

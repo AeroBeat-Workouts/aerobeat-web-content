@@ -6,7 +6,7 @@ Accepted for Task 5.
 
 ## Decision
 
-Each connected game owns one `AeroContentRuntime`. Loading is generation-scoped and replacement cancels stale work. Persistence is available only through an injected public resolver; this package never imports authoring or writes storage. Current authored handles are consumed through deterministic `AEROPKG1` export metadata when available so the runtime can independently verify package and asset hashes.
+Each connected game owns one `AeroContentRuntime`. Loading is generation-scoped and replacement cancels stale work. Persistence is available only through an injected public resolver; this package never imports authoring or writes storage. Current authored handles are consumed through deterministic `AEROPKG1` export metadata when available so the runtime can independently verify package and asset hashes. Public records are descriptor-narrowed before property access; resolver paths and playback IDs are bounded string arrays. Transport timeout/abort and body limits are package-owned, so injected transports cannot bypass cancellation by ignoring `AbortSignal`.
 
 Public snapshots contain only deeply frozen serializable records and source handles. Asset bytes remain behind explicit load/read methods. Critical chart/audio integrity or readability failures prevent readiness, while background failure reports a cosmetic fallback.
 

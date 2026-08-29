@@ -18,6 +18,37 @@ export function isPlainDataRecord(value) {
 }
 
 /**
+ * Read one already-narrowed plain-data field without invoking user code.
+ *
+ * @param {Record<string, unknown>} record
+ * @param {string} key
+ * @returns {unknown}
+ */
+export function dataProperty(record, key) {
+  const descriptor = Object.getOwnPropertyDescriptor(record, key);
+  return descriptor && descriptor.enumerable && "value" in descriptor ? descriptor.value : undefined;
+}
+
+/** @param {unknown} value @param {readonly string[]} keys @returns {value is Record<string, unknown>} */
+export function hasExactDataKeys(value, keys) {
+  if (!isPlainDataRecord(value)) return false;
+  const actual = Reflect.ownKeys(value);
+  return actual.length === keys.length && actual.every((key) => typeof key === "string" && keys.includes(key));
+}
+
+/** Locale-independent Unicode code-point ordering for durable identities. @param {string} left @param {string} right */
+export function compareCodePoints(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+/** Read an own data-only diagnostic string without invoking accessors. @param {unknown} value @param {string} key */
+export function diagnosticString(value, key) {
+  if (value === null || (typeof value !== "object" && typeof value !== "function")) return null;
+  const descriptor = Object.getOwnPropertyDescriptor(value, key);
+  return descriptor && "value" in descriptor && typeof descriptor.value === "string" ? descriptor.value : null;
+}
+
+/**
  * Narrow untrusted package data into deeply frozen JSON-like data without executing
  * accessors or retaining browser/provider objects.
  *

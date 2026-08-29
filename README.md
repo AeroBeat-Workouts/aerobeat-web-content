@@ -58,8 +58,8 @@ Direct wrappers use `{ package, packageHash?, assets }`. Asset descriptors use `
 - Boxing chart hashes are recomputed from beats, recipe, ruleset, and source hash. Declared package and audio hashes are recomputed and compared.
 - Audio and explicitly critical assets block readiness on absence, CORS/readability failure, or hash mismatch.
 - Background failure is cosmetic and produces an explicit CSS fallback with degradation truth.
-- External package/asset URLs require HTTPS, except localhost HTTP for development. Fetch uses CORS mode and omits credentials.
-- `AEROPKG1` parsing validates metadata framing, contiguous bounded ranges, duplicate/canonical paths, trailing bytes, and every asset SHA-256.
+- External package/asset URLs require HTTPS, except localhost HTTP for development. Fetch follows only a still-valid final URL, uses CORS mode, omits credentials, and applies package-owned timeout, abort, declared-length, decoded-body, per-asset, and aggregate byte limits even when injected transports ignore `AbortSignal`.
+- `AEROPKG1` parsing validates exact metadata/table records, metadata/asset-count/per-asset/aggregate bounds, safe-integer contiguous ranges, duplicate/canonical paths, trailing bytes, and every asset SHA-256.
 
 Package environment/theme data remains an optional suggestion. Host precedence is `default < playlist < song < athlete`; runtime content never overrides a valid host selection.
 
