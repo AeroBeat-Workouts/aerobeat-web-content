@@ -25,6 +25,7 @@ export async function validateRuntimePackage(packageValue, options = {}) {
   const song = requireRecord(packageRecord.song, "song_invalid");
   if (song.songId !== songId) throw dataError("song_identity_mismatch", "Package and song identities do not match");
   validateSource(packageRecord.source);
+  const converterProfile = await validatePackageConverterProfile(packageRecord);
   const bpm = readBpm(song);
   const charts = requireArray(packageRecord.charts, "charts_invalid");
   if (charts.length !== 5) throw dataError("chart_count_invalid", "Package must contain Flow plus exactly four Boxing prototype charts");
@@ -50,6 +51,7 @@ export async function validateRuntimePackage(packageValue, options = {}) {
       declaredChartHash = await sha256Hex(canonicalJson(chart));
     } else if (chart.mode === "boxing") {
       const prototype = requireRecord(chart.prototype, "prototype_invalid");
+      await validateChartConverterProfile(prototype, converterProfile);
       if (prototype.contractId !== "aerobeat.boxing.prototype.v1") throw dataError("prototype_contract_invalid", "Boxing prototype contract is unsupported");
       requireString(prototype.recipeVersion, "recipe_version_invalid");
       requireString(prototype.rulesetVersion, "ruleset_version_invalid");
@@ -65,7 +67,7 @@ export async function validateRuntimePackage(packageValue, options = {}) {
       validateEventModifierIdentity(beats, modifierIds);
       const sourceHash = requireHashString(prototype.sourceHash, "source_hash_invalid");
       declaredChartHash = requireHashString(prototype.contentHash, "chart_hash_invalid").slice(7);
-      const actualChartHash = await sha256Hex(canonicalJson({ beats, recipeId, rulesetId, sourceHash: `sha256:${sourceHash.slice(7)}` }));
+      const actualChartHash = await sha256Hex(canonicalJson(chartHashProjection(beats, recipeId, rulesetId, `sha256:${sourceHash.slice(7)}`, converterProfile)));
       if (actualChartHash !== declaredChartHash) throw dataError("chart_hash_mismatch", `Chart ${chartId} failed content-hash verification`);
       matrix.add(`${recipeId}|${rulesetId}`);
     } else {
@@ -143,8 +145,10 @@ export async function composeRuntimeVariant(base, requestedModifiers, packageId)
   chartCopy.chartId = chartId;
   if (base.mode === "boxing") {
     const prototype = /** @type {Record<string, unknown>} */ (cloneMutable(requireRecord(chartCopy.prototype, "prototype_invalid")));
+    const converterProfile = prototype.converterProfile === undefined ? null : await normalizeConverterProfile(prototype.converterProfile);
     prototype.modifiers = [...modifiers];
-    prototype.contentHash = `sha256:${await sha256Hex(canonicalJson({ beats, recipeId: base.recipeId, rulesetId: base.rulesetId, sourceHash: prototype.sourceHash }))}`;
+    if (converterProfile) prototype.converterProfile = cloneMutable(converterProfile);
+    prototype.contentHash = `sha256:${await sha256Hex(canonicalJson(chartHashProjection(beats, base.recipeId, base.rulesetId, requireHashString(prototype.sourceHash, "source_hash_invalid"), converterProfile)))}`;
     chartCopy.prototype = prototype;
   }
   const frozenChart = /** @type {DataRecord} */ (cloneFrozenData(chartCopy));
@@ -164,6 +168,84 @@ export async function composeRuntimeVariant(base, requestedModifiers, packageId)
     chart: frozenChart
   });
 }
+
+/** @param {DataRecord} packageRecord @returns {Promise<Readonly<Record<string, unknown>> | null>} */
+async function validatePackageConverterProfile(packageRecord) {
+  const source = requireRecord(packageRecord.source, "source_provenance_invalid");
+  const sourceValue = source.converterProfile;
+  const traceValue = packageRecord.conversionTrace;
+  const trace = isPlainDataRecord(traceValue) ? traceValue : null;
+  if (sourceValue === undefined) {
+    if (trace && trace.converterProfile !== undefined) throw dataError("converter_profile_unbound", "Conversion trace profile requires package source provenance");
+    validateUnboundTraceProfiles(trace);
+    return null;
+  }
+  const profile = await normalizeConverterProfile(sourceValue);
+  if (!trace) throw dataError("converter_profile_trace_mismatch", "Profile-authored packages require conversion trace provenance");
+  const traceProfile = await normalizeConverterProfile(trace.converterProfile);
+  if (!sameProfile(profile, traceProfile)) throw dataError("converter_profile_trace_mismatch", "Conversion trace profile must exactly match package source provenance");
+  const boxing = requireArray(trace.boxing, "converter_profile_boxing_trace_mismatch");
+  if (boxing.length !== 4) throw dataError("converter_profile_boxing_trace_mismatch", "Profile-authored packages require four Boxing trace profiles");
+  for (const value of boxing) {
+    const boxingTrace = requireRecord(value, "converter_profile_boxing_trace_mismatch");
+    const boxingProfile = await normalizeConverterProfile(boxingTrace.converterProfile);
+    if (!sameProfile(profile, boxingProfile)) throw dataError("converter_profile_boxing_trace_mismatch", "Every Boxing trace profile must match package source provenance");
+  }
+  const flow = requireArray(trace.flow, "converter_profile_flow_trace_forbidden");
+  for (const value of flow) {
+    const flowTrace = requireRecord(value, "converter_profile_flow_trace_forbidden");
+    if (flowTrace.converterProfile !== undefined) throw dataError("converter_profile_flow_trace_forbidden", "Flow traces must not carry Boxing converter profile provenance");
+  }
+  return profile;
+}
+
+/** @param {DataRecord | null} trace */
+function validateUnboundTraceProfiles(trace) {
+  if (!trace) return;
+  for (const key of ["boxing", "flow"]) {
+    const traces = trace[key];
+    if (traces === undefined) continue;
+    const values = requireArray(traces, "converter_profile_unbound");
+    for (const value of values) if (requireRecord(value, "converter_profile_unbound").converterProfile !== undefined) throw dataError("converter_profile_unbound", "Trace converter profile requires package source provenance");
+  }
+}
+
+/** @param {DataRecord} prototype @param {Readonly<Record<string, unknown>> | null} expected */
+async function validateChartConverterProfile(prototype, expected) {
+  if (!expected) {
+    if (prototype.converterProfile !== undefined) throw dataError("converter_profile_unbound", "Chart converter profile requires package source provenance");
+    return;
+  }
+  const actual = await normalizeConverterProfile(prototype.converterProfile);
+  if (!sameProfile(expected, actual)) throw dataError("converter_profile_chart_mismatch", "Chart converter profile must exactly match package source provenance");
+}
+
+/** @param {unknown} value @returns {Promise<Readonly<Record<string, unknown>>>} */
+async function normalizeConverterProfile(value) {
+  const keys = ["schema", "version", "profileId", "profileVersion", "class", "label", "experimental", "settings", "contentHash"];
+  if (!hasExactDataKeys(value, keys)) throw dataError("converter_profile_invalid", "Converter profile must contain the exact bounded profile fields");
+  const record = /** @type {DataRecord} */ (value);
+  if (record.schema !== "aerobeat/prototype_profile" || record.version !== 1 || record.class !== "converter_regeneration" || record.experimental !== true) throw dataError("converter_profile_invalid", "Converter profile schema, version, class and experimental truth are required");
+  const profileId = boundedProfileString(record.profileId, 128);
+  const profileVersion = boundedProfileString(record.profileVersion, 64);
+  const label = boundedProfileString(record.label, 256);
+  if (!hasExactDataKeys(record.settings, ["guardRelocationRadius", "reachAllowanceSubcells"])) throw dataError("converter_profile_settings_invalid", "Converter profile settings must contain the exact supported fields");
+  const settingsValue = /** @type {DataRecord} */ (record.settings);
+  const settings = Object.freeze({ guardRelocationRadius: boundedProfileInteger(settingsValue.guardRelocationRadius), reachAllowanceSubcells: boundedProfileInteger(settingsValue.reachAllowanceSubcells) });
+  const hashBody = Object.freeze({ schema: "aerobeat/prototype_profile", version: 1, profileId, profileVersion, class: "converter_regeneration", settings });
+  const contentHash = await sha256Hex(canonicalJson(hashBody));
+  if (record.contentHash !== contentHash) throw dataError("converter_profile_hash_mismatch", "Converter profile content hash does not match its canonical identity and settings");
+  return Object.freeze({ ...hashBody, label, experimental: true, contentHash });
+}
+
+/** @param {unknown} value @param {number} maximum */
+function boundedProfileString(value, maximum) { if (typeof value !== "string" || !value || value.length > maximum) throw dataError("converter_profile_invalid", "Converter profile strings must be bounded and non-empty"); return value; }
+/** @param {unknown} value */
+function boundedProfileInteger(value) { if (!Number.isInteger(value) || Number(value) < 0 || Number(value) > 8) throw dataError("converter_profile_settings_invalid", "Converter profile settings must be integers from 0 through 8"); return Number(value); }
+/** @param {Readonly<Record<string, unknown>>} left @param {Readonly<Record<string, unknown>>} right */
+function sameProfile(left, right) { return canonicalJson(left) === canonicalJson(right); }
+/** @param {readonly unknown[]} beats @param {string | null} recipeId @param {string} rulesetId @param {string} sourceHash @param {Readonly<Record<string, unknown>> | null} converterProfile */
+function chartHashProjection(beats, recipeId, rulesetId, sourceHash, converterProfile) { return { beats, recipeId, rulesetId, sourceHash, ...(converterProfile ? { converterProfile } : {}) }; }
 
 /** @param {unknown} sourceValue */
 function validateSource(sourceValue) {

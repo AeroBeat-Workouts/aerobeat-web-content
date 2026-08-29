@@ -6,6 +6,7 @@ import {
   aeroContentRuntimeCapabilities,
   aeroContentRuntimeDescriptor,
   aeroContentServiceId,
+  composeRuntimeVariant,
   createAeroContentRuntime,
   validateRuntimePackage
 } from "../src/index.js";
@@ -14,11 +15,31 @@ const audioBytes = new TextEncoder().encode("deterministic-audio-fixture");
 const audioHash = hashBytes(audioBytes);
 const basePackage = await makePackage(audioHash);
 const packageHash = hashJson(basePackage);
+const canonicalConverterProfile = Object.freeze({ schema: "aerobeat/prototype_profile", version: 1, profileId: "aero.converter.canonical", profileVersion: "1.0.0", class: "converter_regeneration", label: "Canonical Converter (Experimental)", experimental: true, settings: Object.freeze({ guardRelocationRadius: 1, reachAllowanceSubcells: 0 }), contentHash: "a43b53a39c13c9e9efe59854aee0fa16efdcd3c6a29bc09f678d94b3fd8f0202" });
+const reachConverterProfile = Object.freeze({ schema: "aerobeat/prototype_profile", version: 1, profileId: "aero.converter.prototype-reach", profileVersion: "1.0.0", class: "converter_regeneration", label: "Prototype Reach Converter (Experimental)", experimental: true, settings: Object.freeze({ guardRelocationRadius: 2, reachAllowanceSubcells: 1 }), contentHash: "e37f8b527ed5ce86738ce22007fc963f83bccd737893fb4728d3b83eaa044eea" });
 
 assert.equal(aeroContentServiceId, "aero.content.library");
 assert.equal(aeroContentRuntimeDescriptor.implementationState, "implemented");
 assert.equal(aeroContentRuntimeCapabilities.playlistAllowlistRequired, false);
-assert.equal((await validateRuntimePackage(basePackage)).variants.length, 5);
+const legacyValidation = await validateRuntimePackage(basePackage);
+assert.equal(legacyValidation.variants.length, 5);
+const legacyBase = legacyValidation.variants.find((entry) => entry.mode === "boxing");
+assert.ok(legacyBase);
+const legacyComposite = await composeRuntimeVariant(legacyBase, ["no_squats"], basePackage.packageId);
+assert.equal(Object.hasOwn(legacyComposite.chart.prototype, "converterProfile"), false);
+assert.equal(legacyComposite.chart.prototype.contentHash, `sha256:${hashJson({ beats: legacyComposite.chart.beats, recipeId: legacyComposite.recipeId, rulesetId: legacyComposite.rulesetId, sourceHash: legacyComposite.chart.prototype.sourceHash })}`);
+const profilePackage = await makePackage(audioHash, canonicalConverterProfile);
+const profileValidation = await validateRuntimePackage(profilePackage);
+assert.equal(profileValidation.variants.length, 5);
+assert.deepEqual(profileValidation.variants.filter((entry) => entry.mode === "boxing").map((entry) => entry.chart.prototype.converterProfile.contentHash), Array(4).fill(canonicalConverterProfile.contentHash));
+const reachPackage = await makePackage(audioHash, reachConverterProfile);
+assert.equal((await validateRuntimePackage(reachPackage)).variants.length, 5);
+const profileBase = profileValidation.variants.find((entry) => entry.mode === "boxing");
+assert.ok(profileBase);
+const profileComposite = await composeRuntimeVariant(profileBase, ["no_squats"], profilePackage.packageId);
+assert.equal(canonical(profileComposite.chart.prototype.converterProfile), canonical(canonicalConverterProfile));
+assert.equal(profileComposite.chart.prototype.contentHash, `sha256:${hashJson({ beats: profileComposite.chart.beats, recipeId: profileComposite.recipeId, rulesetId: profileComposite.rulesetId, sourceHash: profileComposite.chart.prototype.sourceHash, converterProfile: canonicalConverterProfile })}`);
+await verifyProfileRejections(profilePackage);
 
 const runtime = createAeroContentRuntime({ onListenerError() { throw new Error("listener error callback should be isolated too"); } });
 let listenerCalls = 0;
@@ -232,8 +253,8 @@ function hashJson(value) { return hashBytes(new TextEncoder().encode(canonical(v
 function canonical(value) { return JSON.stringify(sort(value)); }
 /** @param {unknown} value @returns {unknown} */
 function sort(value) { if (Array.isArray(value)) return value.map(sort); if (value && typeof value === "object") { const result = {}; for (const key of Object.keys(value).sort()) result[key] = sort(value[key]); return result; } return value; }
-/** @param {string} declaredAudioHash */
-async function makePackage(declaredAudioHash) {
+/** @param {string} declaredAudioHash @param {Readonly<Record<string, unknown>> | null} [converterProfile] */
+async function makePackage(declaredAudioHash, converterProfile = null) {
   const sourceHash = `sha256:${hashBytes(new TextEncoder().encode("arbitrary-source"))}`;
   const recipes = ["row_family_balanced_height_v1", "cut_family_source_height_v1"];
   const rulesets = ["boxing_semantic_track_v1", "boxing_spatial_grid_v1"];
@@ -246,20 +267,70 @@ async function makePackage(declaredAudioHash) {
       { start: 3, type: "straight_left", eventId: `${token}-punch-a`, sourceEventIds: ["source-punch-a"], spatialTarget: { targetCell: 5, acceptedSubcells: [20, 21], sourceCell: 9, qualificationMs: 100 } },
       { start: 4, type: "hook_right", eventId: `${token}-punch-b`, sourceEventIds: ["source-punch-b"], spatialTarget: { targetCell: 6, acceptedSubcells: [26, 27], sourceCell: 5, entryDirection: "left" } }
     ];
-    const contentHash = hashJson({ beats, recipeId, rulesetId, sourceHash });
-    charts.push({ schemaId: "aerobeat.chart.boxing.v1", schemaVersion: 1, recordVersion: 1, chartId: `chart-${token}`, chartName: token, mode: "boxing", difficulty: "Expert", prototype: { contractId: "aerobeat.boxing.prototype.v1", recipeId, recipeVersion: "1.0.0", rulesetId, rulesetVersion: "1.0.0", sourceHash, recipeHash: `sha256:${"1".repeat(64)}`, rulesetHash: `sha256:${"2".repeat(64)}`, contentHash: `sha256:${contentHash}`, modifiers: [], regenerationRequiredFor: [] }, beats });
+    const contentHash = hashJson({ beats, recipeId, rulesetId, sourceHash, ...(converterProfile ? { converterProfile } : {}) });
+    charts.push({ schemaId: "aerobeat.chart.boxing.v1", schemaVersion: 1, recordVersion: 1, chartId: `chart-${token}`, chartName: token, mode: "boxing", difficulty: "Expert", prototype: { contractId: "aerobeat.boxing.prototype.v1", recipeId, recipeVersion: "1.0.0", rulesetId, rulesetVersion: "1.0.0", sourceHash, recipeHash: `sha256:${"1".repeat(64)}`, rulesetHash: `sha256:${"2".repeat(64)}`, contentHash: `sha256:${contentHash}`, modifiers: [], ...(converterProfile ? { converterProfile: structuredClone(converterProfile) } : {}), regenerationRequiredFor: [] }, beats });
   }
   charts.push({ schemaId: "aerobeat.chart.v1", schemaVersion: 1, recordVersion: 1, chartId: "chart-flow", chartName: "Flow", mode: "flow", difficulty: "Expert", beats: [{ start: 1, type: "note", hand: "left", placement: 4, direction: 1 }] });
   return {
     schemaId: "aerobeat.song-package.v1", schemaVersion: 1, packageVersion: "1.0.0", packageId: "package-arbitrary-compatible", songId: "song-arbitrary", songName: "Arbitrary Compatible Map",
-    source: { provider: "community", sourceId: "not-an-allowlist-id", sourceVersionHash: "source-version", difficulty: "Expert", sourceDifficultyPath: "Expert.dat", sourceHash },
+    source: { provider: "community", sourceId: "not-an-allowlist-id", sourceVersionHash: "source-version", difficulty: "Expert", sourceDifficultyPath: "Expert.dat", sourceHash, ...(converterProfile ? { converterProfile: structuredClone(converterProfile) } : {}) },
     song: { schemaId: "aerobeat.song.v1", schemaVersion: 1, recordVersion: 1, songId: "song-arbitrary", songName: "Arbitrary Compatible Map", durationSec: 10, audio: { filePath: "song.ogg", contentHash: `sha256:${declaredAudioHash}` }, timing: { anchorMs: 0, tempoSegments: [{ startBeat: 0, bpm: 120 }], stopSegments: [], timeSignatureSegments: [{ startBeat: 0, numerator: 4, denominator: 4 }] } },
     charts,
     sets: charts.map((chart, index) => ({ schemaId: "aerobeat.set.v1", schemaVersion: 1, recordVersion: 1, setId: `set-${index}`, setName: chart.chartName, songId: "song-arbitrary", chartId: chart.chartId })),
-    recipeDefinitions: [], rulesetDefinitions: [], conversionTrace: {}, presentationSuggestion: null
+    recipeDefinitions: [], rulesetDefinitions: [], conversionTrace: converterProfile ? { converterProfile: structuredClone(converterProfile), boxing: charts.filter((chart) => chart.mode === "boxing").map((chart) => ({ chartId: chart.chartId, converterProfile: structuredClone(converterProfile) })), flow: [{}] } : {}, presentationSuggestion: null
   };
 }
 /** @param {Uint8Array} bytes @param {(metadata: Record<string, unknown>) => Record<string, unknown>} transform */
 function rewriteAeroMetadata(bytes, transform) { const originalLength = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(8, true); const original = /** @type {Record<string, unknown>} */ (JSON.parse(new TextDecoder().decode(bytes.slice(12, 12 + originalLength)))); const metadata = new TextEncoder().encode(canonical(transform(original))); const payload = bytes.slice(12 + originalLength); const output = new Uint8Array(12 + metadata.byteLength + payload.byteLength); output.set(new TextEncoder().encode("AEROPKG1")); new DataView(output.buffer).setUint32(8, metadata.byteLength, true); output.set(metadata, 12); output.set(payload, 12 + metadata.byteLength); return output; }
+/** @param {Record<string, unknown>} profilePackage */
+async function verifyProfileRejections(profilePackage) {
+  const mutations = [];
+  mutations.push((value) => { delete value.source.converterProfile; });
+  mutations.push((value) => { delete value.charts[0].prototype.converterProfile; });
+  mutations.push((value) => { value.charts[0].prototype.converterProfile.extra = true; });
+  mutations.push((value) => { value.charts[0].prototype.converterProfile = structuredClone(reachConverterProfile); });
+  mutations.push((value) => { value.source.converterProfile.settings.guardRelocationRadius = 3; });
+  mutations.push((value) => { value.conversionTrace.boxing[2].converterProfile = structuredClone(reachConverterProfile); });
+  mutations.push((value) => { value.conversionTrace.flow[0].converterProfile = structuredClone(canonicalConverterProfile); });
+  for (const mutate of mutations) {
+    const candidate = structuredClone(profilePackage);
+    mutate(candidate);
+    await assert.rejects(() => validateRuntimePackage(candidate), (error) => Boolean(error && typeof error === "object" && "code" in error && String(error.code).startsWith("converter_profile")));
+  }
+  let getterCalls = 0;
+  const accessor = structuredClone(profilePackage);
+  Object.defineProperty(accessor.source.converterProfile, "profileId", { enumerable: true, get() { getterCalls += 1; return "aero.converter.canonical"; } });
+  await assert.rejects(() => validateRuntimePackage(accessor), hasCode("data_record_invalid"));
+  assert.equal(getterCalls, 0);
+  const hidden = structuredClone(profilePackage);
+  Object.defineProperty(hidden.source.converterProfile, "hidden", { enumerable: false, value: true });
+  await assert.rejects(() => validateRuntimePackage(hidden), hasCode("data_record_invalid"));
+  const symbol = structuredClone(profilePackage);
+  symbol.source.converterProfile[Symbol("profile")] = true;
+  await assert.rejects(() => validateRuntimePackage(symbol), hasCode("data_record_invalid"));
+  const classValue = structuredClone(profilePackage);
+  class ProfileSettings { constructor() { this.guardRelocationRadius = 1; this.reachAllowanceSubcells = 0; } }
+  classValue.source.converterProfile.settings = new ProfileSettings();
+  await assert.rejects(() => validateRuntimePackage(classValue), hasCode("data_record_invalid"));
+  const typed = structuredClone(profilePackage);
+  typed.source.converterProfile.settings = new Uint8Array([1, 0]);
+  await assert.rejects(() => validateRuntimePackage(typed), hasCode("data_record_invalid"));
+  const rehashedProfile = structuredClone(canonicalConverterProfile);
+  rehashedProfile.settings.guardRelocationRadius = 3;
+  rehashedProfile.contentHash = hashJson({ schema: "aerobeat/prototype_profile", version: 1, profileId: rehashedProfile.profileId, profileVersion: rehashedProfile.profileVersion, class: rehashedProfile.class, settings: rehashedProfile.settings });
+  const stalePackage = structuredClone(profilePackage);
+  stalePackage.source.converterProfile = rehashedProfile;
+  stalePackage.conversionTrace.converterProfile = structuredClone(rehashedProfile);
+  for (const trace of stalePackage.conversionTrace.boxing) trace.converterProfile = structuredClone(rehashedProfile);
+  for (const chart of stalePackage.charts.filter((entry) => entry.mode === "boxing")) chart.prototype.converterProfile = structuredClone(rehashedProfile);
+  await assert.rejects(() => validateRuntimePackage(stalePackage), hasCode("chart_hash_mismatch"));
+  const atomicRuntime = createAeroContentRuntime();
+  await atomicRuntime.loadPackage({ package: profilePackage, assets: [{ path: "song.ogg", bytes: audioBytes }] });
+  await assert.rejects(() => atomicRuntime.loadPackage({ package: stalePackage, assets: [{ path: "song.ogg", bytes: audioBytes }] }), hasCode("chart_hash_mismatch"));
+  assert.equal(atomicRuntime.getSnapshot().state, "error");
+  assert.equal(atomicRuntime.getSnapshot().selectedVariant, null);
+  assert.equal(JSON.stringify(atomicRuntime.getSnapshot()).includes(rehashedProfile.contentHash), false);
+}
+
 /** @param {Record<string, unknown>} packageRecord @param {string} declaredPackageHash @param {readonly {path: string, bytes: Uint8Array, hash: string}[]} entries */
 function makeAeroPackage(packageRecord, declaredPackageHash, entries) { let offset = 0; const table = entries.map((entry) => { const row = { path: entry.path, offset, byteLength: entry.bytes.byteLength, sha256: entry.hash }; offset += entry.bytes.byteLength; return row; }); const metadata = new TextEncoder().encode(canonical({ schema: "aerobeat/authored_package_export", version: 1, packageHash: `sha256:${declaredPackageHash}`, package: packageRecord, assets: table })); const bytes = new Uint8Array(12 + metadata.byteLength + offset); bytes.set(new TextEncoder().encode("AEROPKG1")); new DataView(bytes.buffer).setUint32(8, metadata.byteLength, true); bytes.set(metadata, 12); let cursor = 12 + metadata.byteLength; for (const entry of entries) { bytes.set(entry.bytes, cursor); cursor += entry.bytes.byteLength; } return bytes; }

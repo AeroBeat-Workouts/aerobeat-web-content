@@ -10,7 +10,7 @@ Each connected game owns one `AeroContentRuntime`. Loading is generation-scoped 
 
 Public snapshots contain only deeply frozen serializable records and source handles. Asset bytes remain behind explicit load/read methods. Critical chart/audio integrity or readability failures prevent readiness, while background failure reports a cosmetic fallback.
 
-The runtime exposes one Flow variant and the complete frozen 2×2 Boxing matrix. Runtime modifier composites use sorted unique authored-plus-requested identity, are unranked, and expose base/requested/effective provenance.
+The runtime exposes one Flow variant and the complete frozen 2×2 Boxing matrix. Profile-authored Boxing charts bind one exact normalized converter profile across source provenance, the top conversion trace, every Boxing trace and every Boxing chart; their chart hashes and modifier recompositions include that immutable profile. Legacy no-profile packages omit the key entirely and retain their historical chart hashes. Runtime modifier composites use sorted unique authored-plus-requested identity, are unranked, and expose base/requested/effective provenance.
 
 Gameplay remains the owner of score and judgement history. Content receives only paused position plus judged/active IDs. A paused variant swap preserves the exact existing event objects for past, judged, and active targets and suppresses lineage-equivalent replacement duplicates; it replaces only remaining future targets. Any swap or selection while running is rejected.
 

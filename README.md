@@ -55,7 +55,7 @@ Direct wrappers use `{ package, packageHash?, assets }`. Asset descriptors use `
 
 - Package data must be plain enumerable JSON-like data with bounded depth, item count, strings, and no cycles, accessors, class instances, symbols, non-finite numbers, or hidden fields.
 - The current package schema is `aerobeat.song-package.v1` with exactly one Flow chart and the frozen four-chart Boxing recipe/ruleset matrix.
-- Boxing chart hashes are recomputed from beats, recipe, ruleset, and source hash. Declared package and audio hashes are recomputed and compared.
+- Boxing chart hashes are recomputed from beats, recipe, ruleset, source hash, and—only when present—an exact normalized converter profile. Profile-authored packages bind the same profile across source provenance, top conversion trace, every Boxing trace and Boxing chart; legacy packages omit the key and retain their original hashes. Declared package and audio hashes are recomputed and compared.
 - Audio and explicitly critical assets block readiness on absence, CORS/readability failure, or hash mismatch.
 - Background failure is cosmetic and produces an explicit CSS fallback with degradation truth.
 - External package/asset URLs require HTTPS, except localhost HTTP for development. Fetch follows only a still-valid final URL, uses CORS mode, omits credentials, and applies package-owned timeout, abort, declared-length, decoded-body, per-asset, and aggregate byte limits even when injected transports ignore `AbortSignal`.
