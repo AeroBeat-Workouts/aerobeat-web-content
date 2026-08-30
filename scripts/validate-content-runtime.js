@@ -157,6 +157,12 @@ const handle = Object.freeze({ schema: "aerobeat/persistence_handle", version: 1
 const persistenceRuntime = createAeroContentRuntime({ persistenceResolver: { async exportPackage() { if (!persistenceExists) throw Object.assign(new Error("deleted"), { code: "package_not_found" }); return { bytes: exportBytes }; } } });
 await persistenceRuntime.loadPersistenceHandle(handle);
 assert.equal(persistenceRuntime.getSnapshot().source.kind, "persistence_handle");
+const largePackageHash = hashJson(largeCanonicalPackage);
+const largeExportBytes = makeAeroPackage(largeCanonicalPackage, largePackageHash, [{ path: "song.ogg", bytes: audioBytes, hash: audioHash }]);
+const largeHandle = Object.freeze({ ...handle, key: "large-canonical", packageId: largeCanonicalPackage.packageId, packageHash: { schema: "aerobeat/content_hash", version: 1, algorithm: "sha256", value: largePackageHash } });
+const largePersistenceRuntime = createAeroContentRuntime({ persistenceResolver: { async exportPackage() { return { bytes: largeExportBytes }; } } });
+await largePersistenceRuntime.loadPersistenceHandle(largeHandle);
+assert.equal(largePersistenceRuntime.getSnapshot().state, "ready", "AEROPKG persistence must admit a valid canonical package above 100,000 items");
 persistenceExists = false;
 await assert.rejects(() => persistenceRuntime.reload(), hasCode("package_not_found"));
 assert.equal(persistenceRuntime.getSnapshot().state, "error");
@@ -240,6 +246,14 @@ await assert.rejects(() => oversizedResponse.loadExternalPackage("https://length
 const extraMetadataExport = rewriteAeroMetadata(exportBytes, (metadata) => ({ ...metadata, unexpected: true }));
 const archiveRuntime = createAeroContentRuntime({ persistenceResolver: { async exportPackage() { return { bytes: extraMetadataExport }; } } });
 await assert.rejects(() => archiveRuntime.loadPersistenceHandle(handle), hasCode("aeropkg_schema_invalid"));
+const excessivePackageHash = hashJson(excessiveCanonicalPackage);
+const excessiveExport = makeAeroPackage(excessiveCanonicalPackage, excessivePackageHash, [{ path: "song.ogg", bytes: audioBytes, hash: audioHash }]);
+const excessiveHandle = Object.freeze({ ...handle, key: "excessive-canonical", packageId: excessiveCanonicalPackage.packageId, packageHash: { schema: "aerobeat/content_hash", version: 1, algorithm: "sha256", value: excessivePackageHash } });
+const excessiveArchiveRuntime = createAeroContentRuntime({ persistenceResolver: { async exportPackage() { return { bytes: excessiveExport }; } } });
+await assert.rejects(() => excessiveArchiveRuntime.loadPersistenceHandle(excessiveHandle), hasCode("data_too_large"));
+const hostileTableExport = rewriteAeroMetadata(exportBytes, (metadata) => ({ ...metadata, assets: [{ ...metadata.assets[0], unexpected: true }] }));
+const hostileTableRuntime = createAeroContentRuntime({ persistenceResolver: { async exportPackage() { return hostileTableExport; } } });
+await assert.rejects(() => hostileTableRuntime.loadPersistenceHandle(handle), hasCode("aeropkg_asset_invalid"));
 const overflowExport = rewriteAeroMetadata(exportBytes, (metadata) => ({ ...metadata, assets: [{ ...metadata.assets[0], byteLength: Number.MAX_SAFE_INTEGER }] }));
 const overflowRuntime = createAeroContentRuntime({ persistenceResolver: { async exportPackage() { return overflowExport; } } });
 await assert.rejects(() => overflowRuntime.loadPersistenceHandle(handle), hasCode("aeropkg_asset_range_invalid"));

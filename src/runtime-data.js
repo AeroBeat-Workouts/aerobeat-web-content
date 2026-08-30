@@ -1,5 +1,8 @@
 // @ts-check
 
+/** Internal clone limit shared only by canonical song-package boundaries. */
+export const runtimePackageDataLimits = Object.freeze({ maximumItems: 500_000 });
+
 /**
  * Return whether a value is a plain enumerable data record.
  *

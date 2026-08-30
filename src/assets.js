@@ -1,6 +1,6 @@
 // @ts-check
 
-import { cloneFrozenData, dataError, diagnosticString, hasExactDataKeys, isByteArray, isPlainDataRecord, sha256Hex } from "./runtime-data.js";
+import { cloneFrozenData, dataError, diagnosticString, hasExactDataKeys, isByteArray, isPlainDataRecord, runtimePackageDataLimits, sha256Hex } from "./runtime-data.js";
 
 /** @typedef {Readonly<{path: string, kind: "audio" | "background" | "chart" | "other", hash: string, critical: boolean, url: string | null, readable: boolean, status: "ready" | "fallback", errorCode: string | null}>} PublicAssetSnapshot */
 /** @typedef {{path: string, kind: "audio" | "background" | "chart" | "other", hash: string, critical: boolean, url: string | null, bytes: Uint8Array | null, readable: boolean, status: "ready" | "fallback", errorCode: string | null}} LoadedAsset */
@@ -10,6 +10,7 @@ const imageExtensions = new Set(["png", "jpg", "jpeg", "webp", "gif", "avif"]);
 const videoExtensions = new Set(["mp4", "webm", "mov", "m4v"]);
 const maximumMetadataBytes = 16 * 1024 * 1024;
 const maximumAssets = 2048;
+const assetTableDataLimits = Object.freeze({ maximumDepth: 8, maximumItems: maximumAssets * 6 + 1, maximumStringLength: 1024 });
 const maximumAssetBytes = 128 * 1024 * 1024;
 const maximumTotalAssetBytes = 512 * 1024 * 1024;
 const defaultTimeoutMs = 15_000;
@@ -27,10 +28,11 @@ export async function parseAeroPackage(bytes) {
   if (metadataLength <= 0 || metadataLength > maximumMetadataBytes || 12 + metadataLength > bytes.byteLength) throw dataError("aeropkg_metadata_invalid", "AEROPKG1 metadata length is invalid");
   let metadataValue;
   try { metadataValue = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes.slice(12, 12 + metadataLength))); } catch { throw dataError("aeropkg_metadata_invalid", "AEROPKG1 metadata is not valid UTF-8 JSON"); }
-  const metadata = requireRecord(cloneFrozenData(metadataValue), "aeropkg_metadata_invalid");
+  const metadata = requireRecord(metadataValue, "aeropkg_metadata_invalid");
   if (!hasExactDataKeys(metadata, ["schema", "version", "packageHash", "package", "assets"]) || metadata.schema !== "aerobeat/authored_package_export" || metadata.version !== 1) throw dataError("aeropkg_schema_invalid", "AEROPKG1 metadata schema is unsupported");
   const packageHash = requireHash(metadata.packageHash, "aeropkg_package_hash_invalid");
-  const table = requireArray(metadata.assets, "aeropkg_assets_invalid");
+  const packageRecord = cloneFrozenData(metadata.package, runtimePackageDataLimits);
+  const table = requireArray(cloneFrozenData(metadata.assets, assetTableDataLimits), "aeropkg_assets_invalid");
   if (table.length > maximumAssets) throw dataError("aeropkg_assets_invalid", "AEROPKG1 contains too many assets");
   const payloadStart = 12 + metadataLength;
   const seen = new Set();
@@ -57,7 +59,7 @@ export async function parseAeroPackage(bytes) {
     if (expectedOffset > maximumTotalAssetBytes) throw dataError("aeropkg_asset_range_invalid", "AEROPKG1 assets exceed the total byte limit");
   }
   if (payloadStart + expectedOffset !== bytes.byteLength) throw dataError("aeropkg_trailing_bytes", "AEROPKG1 contains unclaimed trailing bytes");
-  return Object.freeze({ package: metadata.package, packageHash, assets: Object.freeze(assets) });
+  return Object.freeze({ package: packageRecord, packageHash, assets: Object.freeze(assets) });
 }
 
 /**

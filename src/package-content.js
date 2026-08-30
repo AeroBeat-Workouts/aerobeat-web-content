@@ -5,9 +5,7 @@ import {
   mapModifierIds,
   rulesetIds
 } from "@aerobeat/web-contracts";
-import { canonicalJson, cloneFrozenData, dataError, hasExactDataKeys, isPlainDataRecord, sha256Hex } from "./runtime-data.js";
-
-const packageMaximumItems = 500_000;
+import { canonicalJson, cloneFrozenData, dataError, hasExactDataKeys, isPlainDataRecord, runtimePackageDataLimits, sha256Hex } from "./runtime-data.js";
 
 /** @typedef {Readonly<Record<string, unknown>>} DataRecord */
 /** @typedef {Readonly<{variantId: string, chartId: string, mode: "flow" | "boxing", rulesetId: string, recipeId: string | null, modifierIds: readonly string[], ranked: boolean, mapHash: Readonly<Record<string, unknown>>, scoreIdentityHash: Readonly<Record<string, unknown>>, provenance: Readonly<Record<string, unknown>>, chart: DataRecord}>} RuntimeVariant */
@@ -19,7 +17,7 @@ const packageMaximumItems = 500_000;
  * @param {{declaredPackageHash?: string | Readonly<Record<string, unknown>> | null, supportedRulesetIds?: readonly string[], supportedRecipeIds?: readonly string[]}} [options]
  */
 export async function validateRuntimePackage(packageValue, options = {}) {
-  const packageRecord = /** @type {DataRecord} */ (cloneFrozenData(packageValue, { maximumItems: packageMaximumItems }));
+  const packageRecord = /** @type {DataRecord} */ (cloneFrozenData(packageValue, runtimePackageDataLimits));
   requireString(packageRecord.schemaId, "package_schema_invalid");
   if (packageRecord.schemaId !== "aerobeat.song-package.v1" || packageRecord.schemaVersion !== 1) throw dataError("package_schema_invalid", "Song package schema/version is unsupported");
   const packageId = requireString(packageRecord.packageId, "package_identity_invalid");
