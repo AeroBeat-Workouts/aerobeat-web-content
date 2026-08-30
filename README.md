@@ -53,7 +53,7 @@ Direct wrappers use `{ package, packageHash?, assets }`. Asset descriptors use `
 
 ## Integrity and Asset Policy
 
-- Package data must be plain enumerable JSON-like data with bounded depth, item count, strings, and no cycles, accessors, class instances, symbols, non-finite numbers, or hidden fields.
+- Package data must be plain enumerable JSON-like data with bounded depth, strings, and a package-specific 500,000-value ceiling, with no cycles, accessors, class instances, symbols, non-finite numbers, or hidden fields. Generic metadata/handle cloning retains its stricter 100,000-value default.
 - The current package schema is `aerobeat.song-package.v1` with exactly one Flow chart and the frozen four-chart Boxing recipe/ruleset matrix.
 - Boxing chart hashes are recomputed from beats, recipe, ruleset, source hash, and—only when present—an exact normalized converter profile. Profile-authored packages bind the same profile across source provenance, top conversion trace, every Boxing trace and Boxing chart; legacy packages omit the key and retain their original hashes. Declared package and audio hashes are recomputed and compared.
 - Audio and explicitly critical assets block readiness on absence, CORS/readability failure, or hash mismatch.

@@ -10,6 +10,7 @@ import {
   createAeroContentRuntime,
   validateRuntimePackage
 } from "../src/index.js";
+import { cloneFrozenData } from "../src/runtime-data.js";
 
 const audioBytes = new TextEncoder().encode("deterministic-audio-fixture");
 const audioHash = hashBytes(audioBytes);
@@ -23,6 +24,17 @@ assert.equal(aeroContentRuntimeDescriptor.implementationState, "implemented");
 assert.equal(aeroContentRuntimeCapabilities.playlistAllowlistRequired, false);
 const legacyValidation = await validateRuntimePackage(basePackage);
 assert.equal(legacyValidation.variants.length, 5);
+assert.throws(() => cloneFrozenData(Array(100_000).fill(null)), hasCode("data_too_large"), "generic data cloning must retain its 100,000-item default");
+const largeCanonicalPackage = packageWithFlowEvents(basePackage, 20_000);
+assert.equal((await validateRuntimePackage(largeCanonicalPackage)).variants.length, 5, "package validation must admit a valid canonical package above the generic item bound");
+const excessiveCanonicalPackage = packageWithFlowEvents(basePackage, 84_000);
+await assert.rejects(() => validateRuntimePackage(excessiveCanonicalPackage), hasCode("data_too_large"), "package validation must remain bounded at 500,000 items");
+const cyclicPackage = structuredClone(basePackage); cyclicPackage.loop = cyclicPackage;
+await assert.rejects(() => validateRuntimePackage(cyclicPackage), hasCode("data_cycle"));
+const deepPackage = structuredClone(basePackage); let deepCursor = deepPackage; for (let index = 0; index < 50; index += 1) { deepCursor.deep = {}; deepCursor = deepCursor.deep; }
+await assert.rejects(() => validateRuntimePackage(deepPackage), hasCode("data_too_deep"));
+const longStringPackage = structuredClone(basePackage); longStringPackage.long = "x".repeat(1_000_001);
+await assert.rejects(() => validateRuntimePackage(longStringPackage), hasCode("string_too_large"));
 const legacyBase = legacyValidation.variants.find((entry) => entry.mode === "boxing");
 assert.ok(legacyBase);
 const legacyComposite = await composeRuntimeVariant(legacyBase, ["no_squats"], basePackage.packageId);
@@ -253,6 +265,15 @@ function hashJson(value) { return hashBytes(new TextEncoder().encode(canonical(v
 function canonical(value) { return JSON.stringify(sort(value)); }
 /** @param {unknown} value @returns {unknown} */
 function sort(value) { if (Array.isArray(value)) return value.map(sort); if (value && typeof value === "object") { const result = {}; for (const key of Object.keys(value).sort()) result[key] = sort(value[key]); return result; } return value; }
+/** @param {Record<string, unknown>} packageRecord @param {number} eventCount */
+function packageWithFlowEvents(packageRecord, eventCount) {
+  const result = structuredClone(packageRecord);
+  const charts = /** @type {Record<string, unknown>[]} */ (result.charts);
+  const flow = charts.find((chart) => chart.mode === "flow");
+  if (!flow) throw new Error("flow fixture missing");
+  flow.beats = Array.from({ length: eventCount }, (_, index) => ({ start: index / 4, type: "note", hand: index % 2 === 0 ? "left" : "right", placement: index % 12, direction: index % 9 }));
+  return result;
+}
 /** @param {string} declaredAudioHash @param {Readonly<Record<string, unknown>> | null} [converterProfile] */
 async function makePackage(declaredAudioHash, converterProfile = null) {
   const sourceHash = `sha256:${hashBytes(new TextEncoder().encode("arbitrary-source"))}`;
