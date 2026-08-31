@@ -10,6 +10,8 @@ import { canonicalJson, cloneFrozenData, dataError, hasExactDataKeys, isPlainDat
 /** @typedef {Readonly<Record<string, unknown>>} DataRecord */
 /** @typedef {Readonly<{variantId: string, chartId: string, mode: "flow" | "boxing", rulesetId: string, recipeId: string | null, modifierIds: readonly string[], ranked: boolean, mapHash: Readonly<Record<string, unknown>>, scoreIdentityHash: Readonly<Record<string, unknown>>, provenance: Readonly<Record<string, unknown>>, chart: DataRecord}>} RuntimeVariant */
 
+const maximumEventTimelineMs = 24 * 60 * 60 * 1000;
+
 /**
  * Narrow and verify one canonical package and return its immutable variant catalog.
  *
@@ -40,7 +42,7 @@ export async function validateRuntimePackage(packageValue, options = {}) {
     if (chartIds.has(chartId)) throw dataError("chart_identity_duplicate", "Chart IDs must be unique");
     chartIds.add(chartId);
     const beats = requireArray(chart.beats, "chart_beats_invalid");
-    validateEvents(beats, chart.mode === "boxing");
+    validateEvents(beats, chart.mode === "boxing", bpm);
     let rulesetId = "flow_grid_v1";
     let recipeId = null;
     /** @type {string[]} */
@@ -269,14 +271,16 @@ function validateSets(setsValue, chartIds) {
   if ([...chartIds].some((chartId) => !linkedCharts.has(chartId))) throw dataError("set_reference_missing", "Every chart must have a set reference");
 }
 
-/** @param {readonly unknown[]} beats @param {boolean} boxing */
-function validateEvents(beats, boxing) {
+/** @param {readonly unknown[]} beats @param {boolean} boxing @param {number} bpm */
+function validateEvents(beats, boxing, bpm) {
   const ids = new Set();
   const lineageOwners = new Set();
   for (let index = 0; index < beats.length; index += 1) {
     const beat = requireRecord(beats[index], "event_invalid");
     if (!Number.isFinite(beat.start) || Number(beat.start) < 0 || typeof beat.type !== "string" || beat.type.length === 0) throw dataError("event_shape_invalid", `Event ${index} is invalid`);
+    requireBoundedEventTimestamp(beat.start, bpm, index, "start");
     if (Object.hasOwn(beat, "end") && (!Number.isFinite(beat.end) || Number(beat.end) < Number(beat.start))) throw dataError("event_interval_invalid", `Event ${index} interval is invalid`);
+    if (Object.hasOwn(beat, "end")) requireBoundedEventTimestamp(beat.end, bpm, index, "end");
     if (!boxing) continue;
     const eventId = requireString(beat.eventId, "event_identity_invalid");
     if (ids.has(eventId)) throw dataError("event_identity_duplicate", "Boxing event IDs must be unique");
@@ -285,6 +289,13 @@ function validateEvents(beats, boxing) {
     if (beat.sourceEventIds.some((entry) => lineageOwners.has(entry))) throw dataError("event_lineage_duplicate", "Source event lineage cannot identify multiple authored targets");
     for (const entry of beat.sourceEventIds) lineageOwners.add(entry);
   }
+}
+
+/** @param {unknown} beatValue @param {number} bpm @param {number} index @param {"start"|"end"} field */
+function requireBoundedEventTimestamp(beatValue, bpm, index, field) {
+  const timestampMs = Number(beatValue) * 60_000 / bpm;
+  if (!Number.isFinite(timestampMs) || timestampMs > maximumEventTimelineMs) throw dataError("event_timeline_invalid", `Event ${index} ${field} exceeds the 24-hour runtime timeline`);
+  return timestampMs;
 }
 
 /** @param {DataRecord} song */
