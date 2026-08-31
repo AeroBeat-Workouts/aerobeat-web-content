@@ -37,7 +37,12 @@ try {
   } catch (cause) {
     throw new Error(`Browser runtime did not become ready: ${consoleFailures.join(" | ") || (cause instanceof Error ? cause.message : "unknown failure")}`);
   }
-  assert.match(await page.locator("aero-content-runtime").innerText(), /aero\.content\.library · implemented · 5 variants/u);
+  const runtime = page.locator("aero-content-runtime");
+  assert.match(await runtime.innerText(), /aero\.content\.library · implemented · 5 variants/u);
+  assert.equal(await runtime.getAttribute("data-interval-start-ms"), "1000");
+  assert.equal(await runtime.getAttribute("data-interval-end-ms"), "1250");
+  assert.equal(await runtime.getAttribute("data-interval-frozen"), "true");
+  assert.equal(await runtime.getAttribute("data-instant-keys"), "schema,version,eventId,variantId,chartId,centerTimestampMs,authoredBeat");
   assert.deepEqual(consoleFailures, []);
 } finally {
   await browser.close();

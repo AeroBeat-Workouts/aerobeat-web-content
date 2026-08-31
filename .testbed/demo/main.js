@@ -20,16 +20,24 @@ class AeroContentRuntimeElement extends HTMLElement {
         charts.push({ schemaId: "aerobeat.chart.boxing.v1", schemaVersion: 1, recordVersion: 1, chartId, chartName: chartId, mode: "boxing", difficulty: "Expert", prototype: { contractId: "aerobeat.boxing.prototype.v1", recipeId, recipeVersion: "1", rulesetId, rulesetVersion: "1", sourceHash, recipeHash: `sha256:${"1".repeat(64)}`, rulesetHash: `sha256:${"2".repeat(64)}`, contentHash: `sha256:${contentHash}`, modifiers: [], converterProfile, regenerationRequiredFor: [] }, beats: [] });
       }
     }
-    charts.push({ schemaId: "aerobeat.chart.v1", schemaVersion: 1, recordVersion: 1, chartId: "browser-flow", chartName: "Browser Flow", mode: "flow", difficulty: "Expert", beats: [] });
-    const packageRecord = { schemaId: "aerobeat.song-package.v1", schemaVersion: 1, packageVersion: "1", packageId: "browser-package", songId: "browser-song", songName: "Browser Runtime", source: { provider: "fixture", sourceId: "browser", sourceVersionHash: "version", difficulty: "Expert", sourceDifficultyPath: "Expert.dat", sourceHash, converterProfile }, song: { schemaId: "aerobeat.song.v1", schemaVersion: 1, recordVersion: 1, songId: "browser-song", songName: "Browser Runtime", durationSec: 1, audio: { filePath: "song.ogg", contentHash: `sha256:${audioHash}` }, timing: { anchorMs: 0, tempoSegments: [{ startBeat: 0, bpm: 120 }], stopSegments: [], timeSignatureSegments: [] } }, charts, sets: charts.map((chart, index) => ({ schemaId: "aerobeat.set.v1", schemaVersion: 1, recordVersion: 1, setId: `browser-set-${index}`, setName: chart.chartName, songId: "browser-song", chartId: chart.chartId })), recipeDefinitions: [], rulesetDefinitions: [], conversionTrace: { converterProfile, boxing: charts.filter((chart) => chart.mode === "boxing").map((chart) => ({ chartId: chart.chartId, converterProfile })), flow: [{}] }, presentationSuggestion: null };
+    charts.push({ schemaId: "aerobeat.chart.v1", schemaVersion: 1, recordVersion: 1, chartId: "browser-flow", chartName: "Browser Flow", mode: "flow", difficulty: "Expert", beats: [{ start: 1, type: "note", hand: "left", placement: 4, direction: 1 }, { start: 2, end: 2.5, type: "obstacle", cells: [1, 2] }] });
+    const packageRecord = { schemaId: "aerobeat.song-package.v1", schemaVersion: 1, packageVersion: "1", packageId: "browser-package", songId: "browser-song", songName: "Browser Runtime", source: { provider: "fixture", sourceId: "browser", sourceVersionHash: "version", difficulty: "Expert", sourceDifficultyPath: "Expert.dat", sourceHash, converterProfile }, song: { schemaId: "aerobeat.song.v1", schemaVersion: 1, recordVersion: 1, songId: "browser-song", songName: "Browser Runtime", durationSec: 2, audio: { filePath: "song.ogg", contentHash: `sha256:${audioHash}` }, timing: { anchorMs: 0, tempoSegments: [{ startBeat: 0, bpm: 120 }], stopSegments: [], timeSignatureSegments: [] } }, charts, sets: charts.map((chart, index) => ({ schemaId: "aerobeat.set.v1", schemaVersion: 1, recordVersion: 1, setId: `browser-set-${index}`, setName: chart.chartName, songId: "browser-song", chartId: chart.chartId })), recipeDefinitions: [], rulesetDefinitions: [], conversionTrace: { converterProfile, boxing: charts.filter((chart) => chart.mode === "boxing").map((chart) => ({ chartId: chart.chartId, converterProfile })), flow: [{}] }, presentationSuggestion: null };
     const first = createAeroContentRuntime();
     const second = createAeroContentRuntime();
     await first.loadPackage({ package: packageRecord, assets: [{ path: "song.ogg", bytes: audio }] });
     await second.loadPackage({ package: packageRecord, assets: [{ path: "song.ogg", bytes: audio }] });
     first.destroy();
-    if (second.getSnapshot().state !== "ready") throw new Error("Runtime instances were not isolated");
+    const snapshot = second.getSnapshot();
+    if (snapshot.state !== "ready") throw new Error("Runtime instances were not isolated");
+    const note = snapshot.resolvedEvents.find((event) => event.authoredBeat.type === "note");
+    const obstacle = snapshot.resolvedEvents.find((event) => event.authoredBeat.type === "obstacle");
+    if (!note || !obstacle) throw new Error("Browser interval fixture did not resolve");
     this.dataset.ready = "true";
-    this.textContent = `${aeroContentServiceId} · ${aeroContentRuntimeDescriptor.implementationState} · ${second.getSnapshot().variants.length} variants`;
+    this.dataset.intervalStartMs = String(obstacle.centerTimestampMs);
+    this.dataset.intervalEndMs = String(obstacle.endTimestampMs);
+    this.dataset.instantKeys = Object.keys(note).join(",");
+    this.dataset.intervalFrozen = String(Object.isFrozen(obstacle) && Object.isFrozen(obstacle.authoredBeat));
+    this.textContent = `${aeroContentServiceId} · ${aeroContentRuntimeDescriptor.implementationState} · ${snapshot.variants.length} variants`;
     second.destroy();
   }
 }

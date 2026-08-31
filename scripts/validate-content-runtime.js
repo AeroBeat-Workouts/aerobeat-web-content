@@ -68,6 +68,53 @@ assert.equal(JSON.stringify(snapshot).includes("deterministic-audio-fixture"), f
 assert.deepEqual(runtime.readAsset("SONG.OGG"), audioBytes);
 assert.ok(listenerCalls >= 2);
 
+const intervalPackage = structuredClone(basePackage);
+intervalPackage.song.durationSec = 90;
+intervalPackage.song.timing.tempoSegments[0].bpm = 150;
+const intervalFlowChart = intervalPackage.charts.find((chart) => chart.mode === "flow");
+assert.ok(intervalFlowChart);
+intervalFlowChart.beats = [
+  { start: 1, type: "note", hand: "left", placement: 4, direction: 1 },
+  { start: 2, end: 3, type: "arc", hand: "left", placement: 4, tailPlacement: 5, direction: 1 },
+  { start: 4, end: 4.5, type: "burst", hand: "right", placement: 7, tailPlacement: 6, direction: 0 },
+  { start: 74.5999984741211, end: 74.6624984741211, type: "obstacle", cells: [1] }
+];
+const intervalRuntime = createAeroContentRuntime();
+await intervalRuntime.loadPackage({ package: intervalPackage, assets: [{ path: "song.ogg", bytes: audioBytes }] });
+const intervalSnapshot = intervalRuntime.getSnapshot();
+const noteEvent = intervalSnapshot.resolvedEvents.find((event) => event.authoredBeat.type === "note");
+const arcEvent = intervalSnapshot.resolvedEvents.find((event) => event.authoredBeat.type === "arc");
+const burstEvent = intervalSnapshot.resolvedEvents.find((event) => event.authoredBeat.type === "burst");
+const obstacleEvent = intervalSnapshot.resolvedEvents.find((event) => event.authoredBeat.type === "obstacle");
+assert.ok(noteEvent && arcEvent && burstEvent && obstacleEvent);
+assert.deepEqual(Object.keys(noteEvent), ["schema", "version", "eventId", "variantId", "chartId", "centerTimestampMs", "authoredBeat"], "instant event envelope remains byte-shape compatible");
+assert.equal(Object.hasOwn(noteEvent, "endTimestampMs"), false);
+assert.equal(arcEvent.endTimestampMs, 1200);
+assert.equal(burstEvent.endTimestampMs, 1800);
+assert.equal(obstacleEvent.centerTimestampMs, 29839.999389648438);
+assert.equal(obstacleEvent.endTimestampMs, 29864.999389648438);
+assert.equal(Object.isFrozen(obstacleEvent), true);
+assert.equal(Object.isFrozen(obstacleEvent.authoredBeat), true);
+assert.deepEqual(JSON.parse(JSON.stringify(obstacleEvent)).authoredBeat.cells, [1]);
+const beforeIntervalSwap = intervalSnapshot.resolvedEvents;
+intervalRuntime.setPlaybackState({ state: "paused", positionMs: 500 });
+await intervalRuntime.swapFutureVariant(intervalSnapshot.selectedVariant.variantId);
+const afterIntervalSwap = intervalRuntime.getSnapshot().resolvedEvents;
+assert.equal(afterIntervalSwap.includes(noteEvent), true, "paused swap preserves exact past instant event identity");
+const replacedObstacle = afterIntervalSwap.find((event) => event.authoredBeat.type === "obstacle");
+assert.ok(replacedObstacle);
+assert.notEqual(replacedObstacle, obstacleEvent, "future interval receives a new immutable timeline envelope");
+assert.equal(replacedObstacle.endTimestampMs, 29864.999389648438);
+intervalRuntime.setPlaybackState({ state: "paused", positionMs: 29850, activeEventIds: [replacedObstacle.eventId] });
+await intervalRuntime.swapFutureVariant(intervalSnapshot.selectedVariant.variantId);
+assert.equal(intervalRuntime.getSnapshot().resolvedEvents.includes(replacedObstacle), true, "active interval identity and end timestamp survive paused swaps");
+assert.equal(beforeIntervalSwap.some((event) => event.endTimestampMs !== undefined), true);
+const backwardsIntervalPackage = structuredClone(basePackage);
+const backwardsFlow = backwardsIntervalPackage.charts.find((chart) => chart.mode === "flow");
+assert.ok(backwardsFlow);
+backwardsFlow.beats = [{ start: 2, end: 1, type: "obstacle", cells: [1] }];
+await assert.rejects(() => validateRuntimePackage(backwardsIntervalPackage), hasCode("event_interval_invalid"));
+
 const boxing = snapshot.variants.find((variant) => variant.rulesetId === "boxing_semantic_track_v1" && variant.recipeId === "row_family_balanced_height_v1");
 assert.ok(boxing);
 await runtime.selectVariant(boxing.variantId, { modifierIds: ["no_squats", "crossed_guard", "cross_body"] });

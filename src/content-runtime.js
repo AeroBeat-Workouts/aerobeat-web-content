@@ -371,7 +371,20 @@ async function raceAbort(promise, signal) { if (signal.aborted) throw dataError(
 /** @param {RuntimeVariant} variant */
 function publicVariant(variant) { return Object.freeze({ variantId: variant.variantId, chartId: variant.chartId, mode: variant.mode, rulesetId: variant.rulesetId, recipeId: variant.recipeId, modifierIds: variant.modifierIds, ranked: variant.ranked, mapHash: variant.mapHash, scoreIdentityHash: variant.scoreIdentityHash, provenance: variant.provenance }); }
 /** @param {RuntimeVariant} variant @param {number} bpm @returns {readonly DataRecord[]} */
-function timelineFor(variant, bpm) { const beats = Array.isArray(variant.chart.beats) ? variant.chart.beats : []; return Object.freeze(beats.map((beatValue, index) => { const beat = /** @type {DataRecord} */ (beatValue); const eventId = typeof beat.eventId === "string" ? beat.eventId : `${variant.chartId}:event:${index}`; return Object.freeze({ schema: "aerobeat/resolved_content_event", version: 1, eventId, variantId: variant.variantId, chartId: variant.chartId, centerTimestampMs: Number(beat.start) * 60_000 / bpm, authoredBeat: beat }); }).sort((left, right) => left.centerTimestampMs - right.centerTimestampMs || compareCodePoints(left.eventId, right.eventId))); }
+function timelineFor(variant, bpm) {
+  const beats = Array.isArray(variant.chart.beats) ? variant.chart.beats : [];
+  return Object.freeze(beats.map((beatValue, index) => {
+    const beat = /** @type {DataRecord} */ (beatValue);
+    const eventId = typeof beat.eventId === "string" ? beat.eventId : `${variant.chartId}:event:${index}`;
+    const centerTimestampMs = Number(beat.start) * 60_000 / bpm;
+    const endTimestampMs = Object.hasOwn(beat, "end") ? Number(beat.end) * 60_000 / bpm : undefined;
+    return Object.freeze({
+      schema: "aerobeat/resolved_content_event", version: 1, eventId, variantId: variant.variantId, chartId: variant.chartId, centerTimestampMs,
+      ...(endTimestampMs === undefined ? {} : { endTimestampMs }),
+      authoredBeat: beat
+    });
+  }).sort((left, right) => left.centerTimestampMs - right.centerTimestampMs || compareCodePoints(left.eventId, right.eventId)));
+}
 /** @param {DataRecord} event @returns {string[]} */
 function eventTargetKeys(event) { const beat = isPlainDataRecord(event.authoredBeat) ? event.authoredBeat : null; const lineage = beat && Array.isArray(beat.sourceEventIds) ? beat.sourceEventIds.filter((entry) => typeof entry === "string").map((entry) => `source:${entry}`) : []; return lineage.length > 0 ? lineage : [`target:${String(event.centerTimestampMs)}:${String(beat?.type ?? "")}`]; }
 /** @param {readonly string[]} values */

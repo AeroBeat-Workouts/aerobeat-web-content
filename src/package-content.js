@@ -276,6 +276,7 @@ function validateEvents(beats, boxing) {
   for (let index = 0; index < beats.length; index += 1) {
     const beat = requireRecord(beats[index], "event_invalid");
     if (!Number.isFinite(beat.start) || Number(beat.start) < 0 || typeof beat.type !== "string" || beat.type.length === 0) throw dataError("event_shape_invalid", `Event ${index} is invalid`);
+    if (Object.hasOwn(beat, "end") && (!Number.isFinite(beat.end) || Number(beat.end) < Number(beat.start))) throw dataError("event_interval_invalid", `Event ${index} interval is invalid`);
     if (!boxing) continue;
     const eventId = requireString(beat.eventId, "event_identity_invalid");
     if (ids.has(eventId)) throw dataError("event_identity_duplicate", "Boxing event IDs must be unique");
