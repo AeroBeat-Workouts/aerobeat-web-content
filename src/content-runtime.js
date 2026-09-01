@@ -177,8 +177,10 @@ export function createAeroContentRuntime(options = {}) {
     setPlaybackState(state) {
       assertReady();
       const narrowed = normalizePlaybackState(state);
+      const nextJudgedEventIds = new Set(narrowed.judgedEventIds); const nextActiveEventIds = new Set(narrowed.activeEventIds);
+      if (playbackState === narrowed.state && playbackPositionMs === narrowed.positionMs && equalStringSets(judgedEventIds, nextJudgedEventIds) && equalStringSets(activeEventIds, nextActiveEventIds)) return;
       playbackState = narrowed.state; playbackPositionMs = narrowed.positionMs;
-      judgedEventIds = new Set(narrowed.judgedEventIds); activeEventIds = new Set(narrowed.activeEventIds);
+      judgedEventIds = nextJudgedEventIds; activeEventIds = nextActiveEventIds;
       publish();
     },
     /** @param {string} path */
@@ -357,6 +359,8 @@ function normalizePlaybackState(value) {
   if (typeof state !== "string" || !["idle", "running", "paused", "stopped"].includes(state) || typeof positionMs !== "number" || !Number.isFinite(positionMs) || positionMs < 0) throw dataError("playback_state_invalid", "Playback state is invalid");
   return Object.freeze({ state: /** @type {"idle" | "running" | "paused" | "stopped"} */ (state), positionMs, judgedEventIds: normalizeOptionalStringArray(dataProperty(value, "judgedEventIds"), 100_000, "event_ids_invalid") ?? Object.freeze([]), activeEventIds: normalizeOptionalStringArray(dataProperty(value, "activeEventIds"), 100_000, "event_ids_invalid") ?? Object.freeze([]) });
 }
+/** @param {Set<string>} left @param {Set<string>} right */
+function equalStringSets(left, right) { return left.size === right.size && [...left].every((value) => right.has(value)); }
 /** @param {unknown} value @param {number} maximum @param {string} code */
 function normalizeOptionalStringArray(value, maximum, code) { if (value === undefined) return undefined; if (!Array.isArray(value) || value.length > maximum || value.some((entry) => typeof entry !== "string" || entry.length === 0 || entry.length > 512)) throw dataError(code, "Expected a bounded string array"); return Object.freeze([...new Set(value)]); }
 /** @param {unknown} value @param {string} code @param {number} maximum */

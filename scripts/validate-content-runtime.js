@@ -67,6 +67,16 @@ assert.equal(Object.isFrozen(snapshot.variants), true);
 assert.equal(JSON.stringify(snapshot).includes("deterministic-audio-fixture"), false);
 assert.deepEqual(runtime.readAsset("SONG.OGG"), audioBytes);
 assert.ok(listenerCalls >= 2);
+const idlePlaybackSnapshot = runtime.getSnapshot(); const idlePlaybackListenerCalls = listenerCalls;
+runtime.setPlaybackState({ state: "idle", positionMs: 0, judgedEventIds: [], activeEventIds: [] });
+assert.equal(runtime.getSnapshot(), idlePlaybackSnapshot, "equivalent playback truth must retain the exact public snapshot");
+assert.equal(listenerCalls, idlePlaybackListenerCalls, "equivalent playback truth must not publish");
+runtime.setPlaybackState({ state: "paused", positionMs: 125, judgedEventIds: ["judged-a", "judged-b"], activeEventIds: ["active-a"] });
+const changedPlaybackSnapshot = runtime.getSnapshot(); const changedPlaybackListenerCalls = listenerCalls;
+assert.notEqual(changedPlaybackSnapshot, idlePlaybackSnapshot, "truthful playback changes must publish a fresh snapshot");
+runtime.setPlaybackState({ state: "paused", positionMs: 125, judgedEventIds: ["judged-b", "judged-a", "judged-a"], activeEventIds: ["active-a", "active-a"] });
+assert.equal(runtime.getSnapshot(), changedPlaybackSnapshot, "equivalent playback ID sets must be order/duplicate independent");
+assert.equal(listenerCalls, changedPlaybackListenerCalls, "equivalent playback ID sets must not publish");
 
 const intervalPackage = structuredClone(basePackage);
 intervalPackage.song.durationSec = 90;

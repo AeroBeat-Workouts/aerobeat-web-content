@@ -76,7 +76,7 @@ Supported modifiers are `no_squats`, `no_weaves`, `any_punch`, `crossed_guard`, 
 
 Resolved event envelopes own authoritative timeline milliseconds. Every event includes `centerTimestampMs` derived from authored `start` and the package BPM. Authored intervals such as Flow obstacles, arcs, and bursts additionally expose immutable optional `endTimestampMs`, derived from authored `end` through the same BPM; instantaneous events omit that key and retain their existing exact envelope shape. Package validation rejects either derived timestamp when it is non-finite or exceeds the inclusive 24-hour runtime bound, so public snapshots cannot degrade overflow to JSON `null`. Authored beats and package/chart bytes and hashes are never rewritten.
 
-A future-target swap is accepted only while paused. Events before the paused position and events identified as judged or active retain their exact frozen object identity, including interval end timing. Only non-overlapping future targets are replaced; content runtime never rewrites gameplay score or judgement history. Selection and future swapping are rejected while running.
+A future-target swap is accepted only while paused. Events before the paused position and events identified as judged or active retain their exact frozen object identity, including interval end timing. Only non-overlapping future targets are replaced; content runtime never rewrites gameplay score or judgement history. Selection and future swapping are rejected while running. Playback publication is exact and idempotent: `setPlaybackState()` publishes only when bounded state, position, judged-event IDs, or active-event IDs truthfully change; equivalent ID sets are order/duplicate independent.
 
 ## Persistence Boundary
 
