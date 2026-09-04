@@ -1,5 +1,7 @@
 // @ts-check
 
+import { sha256Hex as sharedSha256Hex } from "@aerobeat/web-hash";
+
 /** Internal clone limit shared only by canonical song-package boundaries. */
 export const runtimePackageDataLimits = Object.freeze({ maximumItems: 500_000 });
 
@@ -119,11 +121,11 @@ function sortValue(value) {
 
 /** @param {Uint8Array | string} value @returns {Promise<string>} */
 export async function sha256Hex(value) {
-  const bytes = typeof value === "string" ? new TextEncoder().encode(value) : value;
-  const cryptoObject = globalThis.crypto;
-  if (!cryptoObject?.subtle) throw dataError("hash_unavailable", "SHA-256 is unavailable in this environment");
-  const digest = await cryptoObject.subtle.digest("SHA-256", bytes);
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  try {
+    return await sharedSha256Hex(value);
+  } catch {
+    throw dataError("hash_unavailable", "SHA-256 is unavailable in this environment");
+  }
 }
 
 /** @param {unknown} value @returns {value is Uint8Array} */
