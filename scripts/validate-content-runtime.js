@@ -242,6 +242,13 @@ await assert.rejects(() => corsRuntime.loadExternalPackage("https://another-comm
 assert.equal(corsRuntime.getSnapshot().state, "error");
 
 const exportBytes = makeAeroPackage(basePackage, packageHash, [{ path: "song.ogg", bytes: audioBytes, hash: audioHash }]);
+const tamperedExportBytes = exportBytes.slice();
+tamperedExportBytes[tamperedExportBytes.byteLength - 1] ^= 1;
+const tamperedExportRuntime = createAeroContentRuntime({ persistenceResolver: { async exportPackage() { return { bytes: tamperedExportBytes }; } } });
+const tamperedExportHandle = Object.freeze({ schema: "aerobeat/persistence_handle", version: 1, storage: "memory", namespace: "test.authored", key: "tampered-export", packageId: basePackage.packageId, packageHash: { schema: "aerobeat/content_hash", version: 1, algorithm: "sha256", value: packageHash } });
+await assert.rejects(() => tamperedExportRuntime.loadPersistenceHandle(tamperedExportHandle), hasCode("asset_hash_mismatch"), "one-byte AEROPKG asset tampering must fail closed");
+assert.equal(tamperedExportRuntime.getSnapshot().state, "error");
+assert.equal(tamperedExportRuntime.getSnapshot().packageId, null);
 let persistenceExists = true;
 const handle = Object.freeze({ schema: "aerobeat/persistence_handle", version: 1, storage: "memory", namespace: "test.authored", key: "arbitrary-key", packageId: basePackage.packageId, packageHash: { schema: "aerobeat/content_hash", version: 1, algorithm: "sha256", value: packageHash } });
 const persistenceRuntime = createAeroContentRuntime({ persistenceResolver: { async exportPackage() { if (!persistenceExists) throw Object.assign(new Error("deleted"), { code: "package_not_found" }); return { bytes: exportBytes }; } } });
