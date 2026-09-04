@@ -351,7 +351,7 @@ function normalizeLoadOptions(value) {
   return Object.freeze(result);
 }
 /** @param {unknown} value */
-function normalizeModifierSelection(value) { if (!isPlainDataRecord(value)) throw dataError("selection_invalid", "Variant selection must be a plain record"); return normalizeOptionalStringArray(dataProperty(value, "modifierIds"), 5, "modifiers_invalid") ?? Object.freeze([]); }
+function normalizeModifierSelection(value) { if (!isPlainDataRecord(value)) throw dataError("selection_invalid", "Variant selection must be a plain record"); return normalizeOptionalStringArray(dataProperty(value, "modifierIds"), 7, "modifiers_invalid") ?? Object.freeze([]); }
 /** @param {unknown} value */
 function normalizePlaybackState(value) {
   if (!isPlainDataRecord(value)) throw dataError("playback_state_invalid", "Playback state must be a plain record");
@@ -373,18 +373,19 @@ function normalizePathList(value) { if (!Array.isArray(value) || value.length > 
 async function raceAbort(promise, signal) { if (signal.aborted) throw dataError("operation_aborted", "Content load was cancelled"); return new Promise((resolve, reject) => { const aborted = () => { cleanup(); reject(dataError("operation_aborted", "Content load was cancelled")); }; const cleanup = () => signal.removeEventListener("abort", aborted); signal.addEventListener("abort", aborted, { once: true }); promise.then((value) => { cleanup(); resolve(value); }, (cause) => { cleanup(); reject(cause); }); }); }
 
 /** @param {RuntimeVariant} variant */
-function publicVariant(variant) { return Object.freeze({ variantId: variant.variantId, chartId: variant.chartId, mode: variant.mode, rulesetId: variant.rulesetId, recipeId: variant.recipeId, modifierIds: variant.modifierIds, ranked: variant.ranked, mapHash: variant.mapHash, scoreIdentityHash: variant.scoreIdentityHash, provenance: variant.provenance }); }
+function publicVariant(variant) { return Object.freeze({ variantId: variant.variantId, chartId: variant.chartId, mode: variant.mode, rulesetId: variant.rulesetId, recipeId: variant.recipeId, modifierIds: variant.modifierIds, ranked: variant.ranked, localOnly: variant.localOnly, mapHash: variant.mapHash, scoreIdentityHash: variant.scoreIdentityHash, provenance: variant.provenance }); }
 /** @param {RuntimeVariant} variant @param {number} bpm @returns {readonly DataRecord[]} */
 function timelineFor(variant, bpm) {
   const beats = Array.isArray(variant.chart.beats) ? variant.chart.beats : [];
   return Object.freeze(beats.map((beatValue, index) => {
     const beat = /** @type {DataRecord} */ (beatValue);
+    for (const forbidden of ["centerTimestampMs", "intervalStartTimestampMs", "intervalEndTimestampMs", "endTimestampMs"]) if (Object.hasOwn(beat, forbidden)) throw dataError("resolved_event_shadow_invalid", `Authored beat cannot own resolved field ${forbidden}`);
     const eventId = typeof beat.eventId === "string" ? beat.eventId : `${variant.chartId}:event:${index}`;
     const centerTimestampMs = Number(beat.start) * 60_000 / bpm;
-    const endTimestampMs = Object.hasOwn(beat, "end") ? Number(beat.end) * 60_000 / bpm : undefined;
+    const intervalEndTimestampMs = Object.hasOwn(beat, "end") ? Number(beat.end) * 60_000 / bpm : undefined;
     return Object.freeze({
-      schema: "aerobeat/resolved_content_event", version: 1, eventId, variantId: variant.variantId, chartId: variant.chartId, centerTimestampMs,
-      ...(endTimestampMs === undefined ? {} : { endTimestampMs }),
+      schema: "aerobeat/resolved_content_event", version: 2, eventId, variantId: variant.variantId, chartId: variant.chartId, centerTimestampMs,
+      ...(intervalEndTimestampMs === undefined ? {} : { intervalStartTimestampMs: centerTimestampMs, intervalEndTimestampMs }),
       authoredBeat: beat
     });
   }).sort((left, right) => left.centerTimestampMs - right.centerTimestampMs || compareCodePoints(left.eventId, right.eventId)));

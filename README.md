@@ -54,7 +54,7 @@ Direct wrappers use `{ package, packageHash?, assets }`. Asset descriptors use `
 ## Integrity and Asset Policy
 
 - Package data must be plain enumerable JSON-like data with bounded depth, strings, and a package-specific 500,000-value ceiling, with no cycles, accessors, class instances, symbols, non-finite numbers, or hidden fields. Generic metadata/handle cloning retains its stricter 100,000-value default.
-- The current package schema is `aerobeat.song-package.v1` with exactly one Flow chart and the frozen four-chart Boxing recipe/ruleset matrix.
+- Playable content uses `aerobeat.song-package.v2` / package `2.0.0`, with exactly one source-geometry `aerobeat.chart.flow.v2` chart and the frozen four-chart Boxing v1 recipe/ruleset matrix. Legacy package v1 fails with `flow_obstacle_reimport_required` rather than silently gaining collision.
 - Boxing chart hashes are recomputed from beats, recipe, ruleset, source hash, and—only when present—an exact normalized converter profile. Profile-authored packages bind the same profile across source provenance, top conversion trace, every Boxing trace and Boxing chart; legacy packages omit the key and retain their original hashes. Declared package and audio hashes are recomputed and compared through `@aerobeat/web-hash`, using its native fast path or deterministic bundled fallback without changing canonical bytes.
 - Audio and explicitly critical assets block readiness on absence, CORS/readability failure, or hash mismatch.
 - Background failure is cosmetic and produces an explicit CSS fallback with degradation truth.
@@ -72,7 +72,7 @@ The catalog is frozen to Flow plus:
 - Semantic Track · Cut Family
 - Spatial Grid · Cut Family
 
-Supported modifiers are `no_squats`, `no_weaves`, `any_punch`, `crossed_guard`, and `cross_body`. Effective identity is the sorted unique union of authored/emitted and requested modifiers. Runtime composites are always unranked and carry explicit base/requested/effective provenance.
+Supported modifiers are `no_squats`, `no_weaves`, `any_punch`, `crossed_guard`, `cross_body`, `no_obstacles`, and `obstacle_visual_only`. Effective identity is the sorted unique union of authored/emitted and requested modifiers. Runtime composites are always unranked/local-only and carry explicit base/requested/effective provenance. Flow accessibility is between-run and identity-bound: `no_obstacles` removes obstacle events, while `obstacle_visual_only` retains source geometry for visual projection; selecting both fails atomically.
 
 Resolved event envelopes own authoritative timeline milliseconds. Every event includes `centerTimestampMs` derived from authored `start` and the package BPM. Authored intervals such as Flow obstacles, arcs, and bursts additionally expose immutable optional `endTimestampMs`, derived from authored `end` through the same BPM; instantaneous events omit that key and retain their existing exact envelope shape. Package validation rejects either derived timestamp when it is non-finite or exceeds the inclusive 24-hour runtime bound, so public snapshots cannot degrade overflow to JSON `null`. Authored beats and package/chart bytes and hashes are never rewritten.
 

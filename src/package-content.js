@@ -1,5 +1,6 @@
 // @ts-check
 
+import { isFlowObstacleGeometry, isFlowObstacleGridMask, maximumFlowObstaclesPerChart } from "@aerobeat/web-contracts/flow-obstacle-contracts";
 import {
   conversionRecipeIds,
   mapModifierIds,
@@ -8,7 +9,7 @@ import {
 import { canonicalJson, cloneFrozenData, dataError, hasExactDataKeys, isPlainDataRecord, runtimePackageDataLimits, sha256Hex } from "./runtime-data.js";
 
 /** @typedef {Readonly<Record<string, unknown>>} DataRecord */
-/** @typedef {Readonly<{variantId: string, chartId: string, mode: "flow" | "boxing", rulesetId: string, recipeId: string | null, modifierIds: readonly string[], ranked: boolean, mapHash: Readonly<Record<string, unknown>>, scoreIdentityHash: Readonly<Record<string, unknown>>, provenance: Readonly<Record<string, unknown>>, chart: DataRecord}>} RuntimeVariant */
+/** @typedef {Readonly<{variantId: string, chartId: string, mode: "flow" | "boxing", rulesetId: string, recipeId: string | null, modifierIds: readonly string[], ranked: boolean, localOnly: boolean, mapHash: Readonly<Record<string, unknown>>, scoreIdentityHash: Readonly<Record<string, unknown>>, provenance: Readonly<Record<string, unknown>>, chart: DataRecord}>} RuntimeVariant */
 
 const maximumEventTimelineMs = 24 * 60 * 60 * 1000;
 
@@ -21,7 +22,8 @@ const maximumEventTimelineMs = 24 * 60 * 60 * 1000;
 export async function validateRuntimePackage(packageValue, options = {}) {
   const packageRecord = /** @type {DataRecord} */ (cloneFrozenData(packageValue, runtimePackageDataLimits));
   requireString(packageRecord.schemaId, "package_schema_invalid");
-  if (packageRecord.schemaId !== "aerobeat.song-package.v1" || packageRecord.schemaVersion !== 1) throw dataError("package_schema_invalid", "Song package schema/version is unsupported");
+  if (packageRecord.schemaId === "aerobeat.song-package.v1" && packageRecord.schemaVersion === 1) throw dataError("flow_obstacle_reimport_required", "Legacy package lacks source-faithful Flow obstacle geometry and must be reimported");
+  if (packageRecord.schemaId !== "aerobeat.song-package.v2" || packageRecord.schemaVersion !== 2 || packageRecord.packageVersion !== "2.0.0") throw dataError("package_schema_invalid", "Song package schema/version is unsupported");
   const packageId = requireString(packageRecord.packageId, "package_identity_invalid");
   const songId = requireString(packageRecord.songId, "package_identity_invalid");
   const song = requireRecord(packageRecord.song, "song_invalid");
@@ -43,13 +45,14 @@ export async function validateRuntimePackage(packageValue, options = {}) {
     chartIds.add(chartId);
     const beats = requireArray(chart.beats, "chart_beats_invalid");
     validateEvents(beats, chart.mode === "boxing", bpm);
-    let rulesetId = "flow_grid_v1";
+    let rulesetId = "flow_grid_v2";
     let recipeId = null;
     /** @type {string[]} */
     let modifierIds = [];
     let declaredChartHash = "";
     if (chart.mode === "flow") {
       flowCount += 1;
+      if (chart.schemaId !== "aerobeat.chart.flow.v2" || chart.schemaVersion !== 2 || chart.rulesetId !== "flow_grid_v2") throw dataError("flow_chart_schema_invalid", "Flow chart must use source-geometry schema/ruleset v2");
       declaredChartHash = await sha256Hex(canonicalJson(chart));
     } else if (chart.mode === "boxing") {
       const prototype = requireRecord(chart.prototype, "prototype_invalid");
@@ -61,7 +64,7 @@ export async function validateRuntimePackage(packageValue, options = {}) {
       requireHashString(prototype.rulesetHash, "ruleset_hash_invalid");
       rulesetId = requireString(prototype.rulesetId, "ruleset_invalid");
       recipeId = requireString(prototype.recipeId, "recipe_invalid");
-      if (!rulesetIds.includes(/** @type {"flow_grid_v1" | "boxing_semantic_track_v1" | "boxing_spatial_grid_v1"} */ (rulesetId)) || rulesetId === "flow_grid_v1") throw dataError("ruleset_invalid", "Boxing ruleset is unsupported");
+      if (!rulesetIds.includes(/** @type {"flow_grid_v1" | "flow_grid_v2" | "boxing_semantic_track_v1" | "boxing_spatial_grid_v1"} */ (rulesetId)) || rulesetId.startsWith("flow_grid_")) throw dataError("ruleset_invalid", "Boxing ruleset is unsupported");
       if (!conversionRecipeIds.includes(/** @type {"row_family_balanced_height_v1" | "cut_family_source_height_v1"} */ (recipeId))) throw dataError("recipe_invalid", "Conversion recipe is unsupported");
       if (options.supportedRulesetIds && !options.supportedRulesetIds.includes(rulesetId)) throw dataError("ruleset_unavailable", `Ruleset ${rulesetId} is unavailable`);
       if (options.supportedRecipeIds && !options.supportedRecipeIds.includes(recipeId)) throw dataError("recipe_unavailable", `Recipe ${recipeId} is unavailable`);
@@ -85,6 +88,7 @@ export async function validateRuntimePackage(packageValue, options = {}) {
       recipeId,
       modifierIds: Object.freeze([...modifierIds]),
       ranked: true,
+      localOnly: false,
       mapHash,
       scoreIdentityHash: contentHash(scoreValue),
       provenance: Object.freeze({ schema: "aerobeat/runtime_variant_provenance", version: 1, kind: "authored", baseVariantId: null, requestedModifierIds: Object.freeze([]), effectiveModifierIds: Object.freeze([...modifierIds]) }),
@@ -120,11 +124,13 @@ export async function validateRuntimePackage(packageValue, options = {}) {
 export async function composeRuntimeVariant(base, requestedModifiers, packageId) {
   const requested = normalizeModifiers(requestedModifiers);
   const modifiers = normalizeModifiers([...base.modifierIds, ...requested]);
+  if (modifiers.includes("no_obstacles") && modifiers.includes("obstacle_visual_only")) throw dataError("modifier_conflict", "Obstacle accessibility modes are mutually exclusive");
   if (modifiers.every((entry, index) => entry === base.modifierIds[index]) && modifiers.length === base.modifierIds.length) return base;
   const chartCopy = /** @type {Record<string, unknown>} */ (cloneMutable(base.chart));
   let beats = /** @type {Record<string, unknown>[]} */ (requireArray(chartCopy.beats, "chart_beats_invalid").map((beat) => /** @type {Record<string, unknown>} */ (cloneMutable(beat))));
   if (modifiers.includes("no_squats")) beats = beats.filter((beat) => beat.type !== "squat");
   if (modifiers.includes("no_weaves")) beats = beats.filter((beat) => beat.type !== "weave_left" && beat.type !== "weave_right");
+  if (base.mode === "flow" && modifiers.includes("no_obstacles")) beats = beats.filter((beat) => beat.type !== "obstacle");
   for (const beat of beats) {
     const type = String(beat.type ?? "");
     if (/^(straight|hook|uppercut)_/u.test(type)) {
@@ -164,6 +170,7 @@ export async function composeRuntimeVariant(base, requestedModifiers, packageId)
     recipeId: base.recipeId,
     modifierIds: Object.freeze(modifiers),
     ranked: false,
+    localOnly: true,
     mapHash: contentHash(mapHashValue),
     scoreIdentityHash: contentHash(scoreValue),
     provenance: Object.freeze({ schema: "aerobeat/runtime_variant_provenance", version: 1, kind: "runtime_composite", baseVariantId: base.variantId, requestedModifierIds: Object.freeze(requested), effectiveModifierIds: Object.freeze([...modifiers]) }),
@@ -254,6 +261,7 @@ function validateSource(sourceValue) {
   const source = requireRecord(sourceValue, "source_provenance_invalid");
   for (const key of ["provider", "sourceId", "sourceVersionHash", "difficulty", "sourceDifficultyPath"]) requireString(source[key], "source_provenance_invalid");
   requireHashString(source.sourceHash, "source_hash_invalid");
+  if (source.flowObstacleContract !== "source_geometry_v1") throw dataError("flow_obstacle_contract_invalid", "Package source must bind source_geometry_v1");
 }
 
 /** @param {unknown} setsValue @param {Set<string>} chartIds */
@@ -275,12 +283,19 @@ function validateSets(setsValue, chartIds) {
 function validateEvents(beats, boxing, bpm) {
   const ids = new Set();
   const lineageOwners = new Set();
+  let obstacleCount = 0;
   for (let index = 0; index < beats.length; index += 1) {
     const beat = requireRecord(beats[index], "event_invalid");
     if (!Number.isFinite(beat.start) || Number(beat.start) < 0 || typeof beat.type !== "string" || beat.type.length === 0) throw dataError("event_shape_invalid", `Event ${index} is invalid`);
     requireBoundedEventTimestamp(beat.start, bpm, index, "start");
     if (Object.hasOwn(beat, "end") && (!Number.isFinite(beat.end) || Number(beat.end) < Number(beat.start))) throw dataError("event_interval_invalid", `Event ${index} interval is invalid`);
     if (Object.hasOwn(beat, "end")) requireBoundedEventTimestamp(beat.end, bpm, index, "end");
+    if (!boxing && beat.type === "obstacle") {
+      obstacleCount += 1;
+      const keys = ["start", "end", "type", "geometry", "gridMask"];
+      if (!hasExactDataKeys(beat, keys) || Number(beat.end) <= Number(beat.start) || !isFlowObstacleGeometry(beat.geometry) || !isFlowObstacleGridMask(beat.gridMask, /** @type {import("@aerobeat/web-contracts/flow-obstacle-contracts").AeroFlowObstacleGeometry} */ (beat.geometry))) throw dataError("flow_obstacle_invalid", `Event ${index} obstacle geometry/mask/interval is invalid`);
+      if (obstacleCount > maximumFlowObstaclesPerChart) throw dataError("flow_obstacle_limit_exceeded", "Flow chart exceeds the obstacle limit");
+    }
     if (!boxing) continue;
     const eventId = requireString(beat.eventId, "event_identity_invalid");
     if (ids.has(eventId)) throw dataError("event_identity_duplicate", "Boxing event IDs must be unique");
