@@ -384,7 +384,7 @@ function timelineFor(variant, bpm) {
     const centerTimestampMs = Number(beat.start) * 60_000 / bpm;
     const intervalEndTimestampMs = Object.hasOwn(beat, "end") ? Number(beat.end) * 60_000 / bpm : undefined;
     return Object.freeze({
-      schema: "aerobeat/resolved_content_event", version: 2, eventId, variantId: variant.variantId, chartId: variant.chartId, centerTimestampMs,
+      schema: "aerobeat/resolved_content_event", version: 3, eventId, variantId: variant.variantId, chartId: variant.chartId, centerTimestampMs,
       ...(intervalEndTimestampMs === undefined ? {} : { intervalStartTimestampMs: centerTimestampMs, intervalEndTimestampMs }),
       authoredBeat: beat
     });

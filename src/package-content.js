@@ -1,6 +1,6 @@
 // @ts-check
 
-import { isFlowObstacleGeometry, isFlowObstacleGridMask, maximumFlowObstaclesPerChart } from "@aerobeat/web-contracts/flow-obstacle-contracts";
+import { isObstacleGameplayGeometry, isObstacleGridMask, isObstacleSourceGeometry, maximumObstaclesPerChart } from "@aerobeat/web-contracts/obstacle-contracts";
 import {
   conversionRecipeIds,
   mapModifierIds,
@@ -22,8 +22,8 @@ const maximumEventTimelineMs = 24 * 60 * 60 * 1000;
 export async function validateRuntimePackage(packageValue, options = {}) {
   const packageRecord = /** @type {DataRecord} */ (cloneFrozenData(packageValue, runtimePackageDataLimits));
   requireString(packageRecord.schemaId, "package_schema_invalid");
-  if (packageRecord.schemaId === "aerobeat.song-package.v1" && packageRecord.schemaVersion === 1) throw dataError("flow_obstacle_reimport_required", "Legacy package lacks source-faithful Flow obstacle geometry and must be reimported");
-  if (packageRecord.schemaId !== "aerobeat.song-package.v2" || packageRecord.schemaVersion !== 2 || packageRecord.packageVersion !== "2.0.0") throw dataError("package_schema_invalid", "Song package schema/version is unsupported");
+  if ((packageRecord.schemaId === "aerobeat.song-package.v1" && packageRecord.schemaVersion === 1) || (packageRecord.schemaId === "aerobeat.song-package.v2" && packageRecord.schemaVersion === 2)) throw dataError("flow_obstacle_reimport_required", "Prior-contract package requires reimport for normalized obstacle geometry");
+  if (packageRecord.schemaId !== "aerobeat.song-package.v3" || packageRecord.schemaVersion !== 3 || packageRecord.packageVersion !== "3.0.0") throw dataError("package_schema_invalid", "Song package schema/version is unsupported");
   const packageId = requireString(packageRecord.packageId, "package_identity_invalid");
   const songId = requireString(packageRecord.songId, "package_identity_invalid");
   const song = requireRecord(packageRecord.song, "song_invalid");
@@ -52,7 +52,7 @@ export async function validateRuntimePackage(packageValue, options = {}) {
     let declaredChartHash = "";
     if (chart.mode === "flow") {
       flowCount += 1;
-      if (chart.schemaId !== "aerobeat.chart.flow.v2" || chart.schemaVersion !== 2 || chart.rulesetId !== "flow_grid_v2") throw dataError("flow_chart_schema_invalid", "Flow chart must use source-geometry schema/ruleset v2");
+      if (chart.schemaId !== "aerobeat.chart.flow.v3" || chart.schemaVersion !== 3 || chart.rulesetId !== "flow_grid_v2") throw dataError("flow_chart_schema_invalid", "Flow chart must use normalized obstacle schema/ruleset v3");
       declaredChartHash = await sha256Hex(canonicalJson(chart));
     } else if (chart.mode === "boxing") {
       const prototype = requireRecord(chart.prototype, "prototype_invalid");
@@ -261,7 +261,7 @@ function validateSource(sourceValue) {
   const source = requireRecord(sourceValue, "source_provenance_invalid");
   for (const key of ["provider", "sourceId", "sourceVersionHash", "difficulty", "sourceDifficultyPath"]) requireString(source[key], "source_provenance_invalid");
   requireHashString(source.sourceHash, "source_hash_invalid");
-  if (source.flowObstacleContract !== "source_geometry_v1") throw dataError("flow_obstacle_contract_invalid", "Package source must bind source_geometry_v1");
+  if (source.obstacleContract !== "normalized_obstacle_v2") throw dataError("obstacle_contract_invalid", "Package source must bind normalized_obstacle_v2");
 }
 
 /** @param {unknown} setsValue @param {Set<string>} chartIds */
@@ -292,9 +292,9 @@ function validateEvents(beats, boxing, bpm) {
     if (Object.hasOwn(beat, "end")) requireBoundedEventTimestamp(beat.end, bpm, index, "end");
     if (!boxing && beat.type === "obstacle") {
       obstacleCount += 1;
-      const keys = ["start", "end", "type", "geometry", "gridMask"];
-      if (!hasExactDataKeys(beat, keys) || Number(beat.end) <= Number(beat.start) || !isFlowObstacleGeometry(beat.geometry) || !isFlowObstacleGridMask(beat.gridMask, /** @type {import("@aerobeat/web-contracts/flow-obstacle-contracts").AeroFlowObstacleGeometry} */ (beat.geometry))) throw dataError("flow_obstacle_invalid", `Event ${index} obstacle geometry/mask/interval is invalid`);
-      if (obstacleCount > maximumFlowObstaclesPerChart) throw dataError("flow_obstacle_limit_exceeded", "Flow chart exceeds the obstacle limit");
+      const keys = ["start", "end", "type", "sourceGeometry", "gameplayGeometry", "gridMask"];
+      if (!hasExactDataKeys(beat, keys) || Number(beat.end) <= Number(beat.start) || !isObstacleSourceGeometry(beat.sourceGeometry) || !isObstacleGameplayGeometry(beat.gameplayGeometry) || !isObstacleGridMask(beat.gridMask, /** @type {import("@aerobeat/web-contracts/obstacle-contracts").AeroObstacleGameplayGeometry} */ (beat.gameplayGeometry))) throw dataError("flow_obstacle_invalid", `Event ${index} obstacle source/gameplay geometry, mask, or interval is invalid`);
+      if (obstacleCount > maximumObstaclesPerChart) throw dataError("flow_obstacle_limit_exceeded", "Flow chart exceeds the obstacle limit");
     }
     if (!boxing) continue;
     const eventId = requireString(beat.eventId, "event_identity_invalid");

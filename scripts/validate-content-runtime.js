@@ -17,7 +17,8 @@ const audioHash = hashBytes(audioBytes);
 const basePackage = await makePackage(audioHash);
 const packageHash = hashJson(basePackage);
 const canonicalConverterProfile = Object.freeze({ schema: "aerobeat/prototype_profile", version: 1, profileId: "aero.converter.canonical", profileVersion: "1.0.0", class: "converter_regeneration", label: "Canonical Converter (Experimental)", experimental: true, settings: Object.freeze({ guardRelocationRadius: 1, reachAllowanceSubcells: 0 }), contentHash: "a43b53a39c13c9e9efe59854aee0fa16efdcd3c6a29bc09f678d94b3fd8f0202" });
-const flowGeometry = Object.freeze({ schema: "aerobeat/flow_obstacle_geometry", version: 1, coordinateSpace: "beatsaber_lane_layer", x: 1, y: 2, width: 1, height: 3 });
+const sourceGeometry = Object.freeze({ schema:"aerobeat/obstacle_source_geometry",version:1,coordinateSpace:"beatsaber_v2_legacy_obstacle",kind:"v2_type_1",x:1,y:2,width:1,height:3 });
+const gameplayGeometry = Object.freeze({ schema:"aerobeat/obstacle_gameplay_geometry",version:1,coordinateSpace:"aerobeat_top_left_grid",x:1,y:0,width:1,height:3 });
 const reachConverterProfile = Object.freeze({ schema: "aerobeat/prototype_profile", version: 1, profileId: "aero.converter.prototype-reach", profileVersion: "1.0.0", class: "converter_regeneration", label: "Prototype Reach Converter (Experimental)", experimental: true, settings: Object.freeze({ guardRelocationRadius: 2, reachAllowanceSubcells: 1 }), contentHash: "e37f8b527ed5ce86738ce22007fc963f83bccd737893fb4728d3b83eaa044eea" });
 
 assert.equal(aeroContentServiceId, "aero.content.library");
@@ -88,7 +89,7 @@ intervalFlowChart.beats = [
   { start: 1, type: "note", hand: "left", placement: 4, direction: 1 },
   { start: 2, end: 3, type: "arc", hand: "left", placement: 4, tailPlacement: 5, direction: 1 },
   { start: 4, end: 4.5, type: "burst", hand: "right", placement: 7, tailPlacement: 6, direction: 0 },
-  { start: 74.5999984741211, end: 74.6624984741211, type: "obstacle", geometry: flowGeometry, gridMask: [1] }
+  { start: 74.5999984741211, end: 74.6624984741211, type: "obstacle", sourceGeometry, gameplayGeometry, gridMask: [1,5,9] }
 ];
 const intervalRuntime = createAeroContentRuntime();
 await intervalRuntime.loadPackage({ package: intervalPackage, assets: [{ path: "song.ogg", bytes: audioBytes }] });
@@ -98,7 +99,7 @@ const arcEvent = intervalSnapshot.resolvedEvents.find((event) => event.authoredB
 const burstEvent = intervalSnapshot.resolvedEvents.find((event) => event.authoredBeat.type === "burst");
 const obstacleEvent = intervalSnapshot.resolvedEvents.find((event) => event.authoredBeat.type === "obstacle");
 assert.ok(noteEvent && arcEvent && burstEvent && obstacleEvent);
-assert.equal(noteEvent.version, 2);
+assert.equal(noteEvent.version, 3);
 assert.deepEqual(Object.keys(noteEvent), ["schema", "version", "eventId", "variantId", "chartId", "centerTimestampMs", "authoredBeat"], "instant event envelope remains byte-shape compatible");
 assert.equal(Object.hasOwn(noteEvent, "intervalEndTimestampMs"), false);
 assert.equal(arcEvent.intervalEndTimestampMs, 1200);
@@ -108,7 +109,7 @@ assert.equal(obstacleEvent.intervalStartTimestampMs, obstacleEvent.centerTimesta
 assert.equal(obstacleEvent.intervalEndTimestampMs, 29864.999389648438);
 assert.equal(Object.isFrozen(obstacleEvent), true);
 assert.equal(Object.isFrozen(obstacleEvent.authoredBeat), true);
-assert.deepEqual(JSON.parse(JSON.stringify(obstacleEvent)).authoredBeat.gridMask, [1]);
+assert.deepEqual(JSON.parse(JSON.stringify(obstacleEvent)).authoredBeat.gridMask, [1,5,9]);
 const beforeIntervalSwap = intervalSnapshot.resolvedEvents;
 intervalRuntime.setPlaybackState({ state: "paused", positionMs: 500 });
 await intervalRuntime.swapFutureVariant(intervalSnapshot.selectedVariant.variantId);
@@ -134,13 +135,13 @@ await assert.rejects(() => accessibilityRuntime.selectVariant(accessibilityFlowI
 const backwardsIntervalPackage = structuredClone(basePackage);
 const backwardsFlow = backwardsIntervalPackage.charts.find((chart) => chart.mode === "flow");
 assert.ok(backwardsFlow);
-backwardsFlow.beats = [{ start: 2, end: 1, type: "obstacle", geometry: flowGeometry, gridMask: [1] }];
+backwardsFlow.beats = [{ start: 2, end: 1, type: "obstacle", sourceGeometry, gameplayGeometry, gridMask: [1,5,9] }];
 await assert.rejects(() => validateRuntimePackage(backwardsIntervalPackage), hasCode("event_interval_invalid"));
 const maskMismatchPackage = structuredClone(basePackage);
-maskMismatchPackage.charts.find((chart) => chart.mode === "flow").beats = [{ start: 1, end: 2, type: "obstacle", geometry: flowGeometry, gridMask: [1, 5, 9] }];
+maskMismatchPackage.charts.find((chart) => chart.mode === "flow").beats = [{ start: 1, end: 2, type: "obstacle", sourceGeometry, gameplayGeometry, gridMask: [1] }];
 await assert.rejects(() => validateRuntimePackage(maskMismatchPackage), hasCode("flow_obstacle_invalid"));
 const tooManyObstacles = structuredClone(basePackage);
-tooManyObstacles.charts.find((chart) => chart.mode === "flow").beats = Array.from({ length: 129 }, (_, index) => ({ start: index, end: index + 0.5, type: "obstacle", geometry: flowGeometry, gridMask: [1] }));
+tooManyObstacles.charts.find((chart) => chart.mode === "flow").beats = Array.from({ length: 129 }, (_, index) => ({ start: index, end: index + 0.5, type: "obstacle", sourceGeometry, gameplayGeometry, gridMask: [1,5,9] }));
 await assert.rejects(() => validateRuntimePackage(tooManyObstacles), hasCode("flow_obstacle_limit_exceeded"));
 const exactObstacleLimit = structuredClone(tooManyObstacles);
 exactObstacleLimit.charts.find((chart) => chart.mode === "flow").beats.pop();
@@ -160,13 +161,13 @@ await assert.rejects(() => validateRuntimePackage(startOverflowPackage), hasCode
 const endOverflowPackage = structuredClone(basePackage);
 const endOverflowFlow = endOverflowPackage.charts.find((chart) => chart.mode === "flow");
 assert.ok(endOverflowFlow);
-endOverflowFlow.beats = [{ start: 0, end: 1e308, type: "obstacle", geometry: flowGeometry, gridMask: [1] }];
+endOverflowFlow.beats = [{ start: 0, end: 1e308, type: "obstacle", sourceGeometry, gameplayGeometry, gridMask: [1,5,9] }];
 await assert.rejects(() => validateRuntimePackage(endOverflowPackage), hasCode("event_timeline_invalid"), "finite authored end that derives Infinity must reject before publication");
 const boundaryPackage = structuredClone(basePackage);
 boundaryPackage.song.durationSec = 86_400;
 const boundaryFlow = boundaryPackage.charts.find((chart) => chart.mode === "flow");
 assert.ok(boundaryFlow);
-boundaryFlow.beats = [{ start: 172_800, type: "note", hand: "left", placement: 4, direction: 1 }, { start: 172_799, end: 172_800, type: "obstacle", geometry: flowGeometry, gridMask: [1] }];
+boundaryFlow.beats = [{ start: 172_800, type: "note", hand: "left", placement: 4, direction: 1 }, { start: 172_799, end: 172_800, type: "obstacle", sourceGeometry, gameplayGeometry, gridMask: [1,5,9] }];
 await validateRuntimePackage(boundaryPackage);
 const timelineBoundaryRuntime = createAeroContentRuntime();
 await timelineBoundaryRuntime.loadPackage({ package: boundaryPackage, assets: [{ path: "song.ogg", bytes: audioBytes }] });
@@ -183,7 +184,7 @@ await assert.rejects(() => validateRuntimePackage(centerPastBoundaryPackage), ha
 const endPastBoundaryPackage = structuredClone(basePackage);
 const endPastBoundaryFlow = endPastBoundaryPackage.charts.find((chart) => chart.mode === "flow");
 assert.ok(endPastBoundaryFlow);
-endPastBoundaryFlow.beats = [{ start: 172_799, end: 172_800.000001, type: "obstacle", geometry: flowGeometry, gridMask: [1] }];
+endPastBoundaryFlow.beats = [{ start: 172_799, end: 172_800.000001, type: "obstacle", sourceGeometry, gameplayGeometry, gridMask: [1,5,9] }];
 await assert.rejects(() => validateRuntimePackage(endPastBoundaryPackage), hasCode("event_timeline_invalid"), "interval end immediately after 24 hours rejects");
 
 const boxing = snapshot.variants.find((variant) => variant.rulesetId === "boxing_semantic_track_v1" && variant.recipeId === "row_family_balanced_height_v1");
@@ -430,10 +431,10 @@ async function makePackage(declaredAudioHash, converterProfile = null) {
     const contentHash = hashJson({ beats, recipeId, rulesetId, sourceHash, ...(converterProfile ? { converterProfile } : {}) });
     charts.push({ schemaId: "aerobeat.chart.boxing.v1", schemaVersion: 1, recordVersion: 1, chartId: `chart-${token}`, chartName: token, mode: "boxing", difficulty: "Expert", prototype: { contractId: "aerobeat.boxing.prototype.v1", recipeId, recipeVersion: "1.0.0", rulesetId, rulesetVersion: "1.0.0", sourceHash, recipeHash: `sha256:${"1".repeat(64)}`, rulesetHash: `sha256:${"2".repeat(64)}`, contentHash: `sha256:${contentHash}`, modifiers: [], ...(converterProfile ? { converterProfile: structuredClone(converterProfile) } : {}), regenerationRequiredFor: [] }, beats });
   }
-  charts.push({ schemaId: "aerobeat.chart.flow.v2", schemaVersion: 2, recordVersion: 1, rulesetId: "flow_grid_v2", chartId: "chart-flow", chartName: "Flow", mode: "flow", difficulty: "Expert", beats: [{ start: 1, type: "note", hand: "left", placement: 4, direction: 1 }] });
+  charts.push({ schemaId: "aerobeat.chart.flow.v3", schemaVersion: 3, recordVersion: 2, rulesetId: "flow_grid_v2", chartId: "chart-flow", chartName: "Flow", mode: "flow", difficulty: "Expert", beats: [{ start: 1, type: "note", hand: "left", placement: 4, direction: 1 }] });
   return {
-    schemaId: "aerobeat.song-package.v2", schemaVersion: 2, packageVersion: "2.0.0", packageId: "package-arbitrary-compatible", songId: "song-arbitrary", songName: "Arbitrary Compatible Map",
-    source: { provider: "community", sourceId: "not-an-allowlist-id", sourceVersionHash: "source-version", difficulty: "Expert", sourceDifficultyPath: "Expert.dat", sourceHash, flowObstacleContract: "source_geometry_v1", ...(converterProfile ? { converterProfile: structuredClone(converterProfile) } : {}) },
+    schemaId: "aerobeat.song-package.v3", schemaVersion: 3, packageVersion: "3.0.0", packageId: "package-arbitrary-compatible", songId: "song-arbitrary", songName: "Arbitrary Compatible Map",
+    source: { provider: "community", sourceId: "not-an-allowlist-id", sourceVersionHash: "source-version", difficulty: "Expert", sourceDifficultyPath: "Expert.dat", sourceHash, obstacleContract: "normalized_obstacle_v2", ...(converterProfile ? { converterProfile: structuredClone(converterProfile) } : {}) },
     song: { schemaId: "aerobeat.song.v1", schemaVersion: 1, recordVersion: 1, songId: "song-arbitrary", songName: "Arbitrary Compatible Map", durationSec: 10, audio: { filePath: "song.ogg", contentHash: `sha256:${declaredAudioHash}` }, timing: { anchorMs: 0, tempoSegments: [{ startBeat: 0, bpm: 120 }], stopSegments: [], timeSignatureSegments: [{ startBeat: 0, numerator: 4, denominator: 4 }] } },
     charts,
     sets: charts.map((chart, index) => ({ schemaId: "aerobeat.set.v1", schemaVersion: 1, recordVersion: 1, setId: `set-${index}`, setName: chart.chartName, songId: "song-arbitrary", chartId: chart.chartId })),

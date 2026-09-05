@@ -54,7 +54,7 @@ Direct wrappers use `{ package, packageHash?, assets }`. Asset descriptors use `
 ## Integrity and Asset Policy
 
 - Package data must be plain enumerable JSON-like data with bounded depth, strings, and a package-specific 500,000-value ceiling, with no cycles, accessors, class instances, symbols, non-finite numbers, or hidden fields. Generic metadata/handle cloning retains its stricter 100,000-value default.
-- Playable content uses `aerobeat.song-package.v2` / package `2.0.0`, with exactly one source-geometry `aerobeat.chart.flow.v2` chart and the frozen four-chart Boxing v1 recipe/ruleset matrix. Legacy package v1 fails with `flow_obstacle_reimport_required` rather than silently gaining collision.
+- Playable content uses `aerobeat.song-package.v3` / package `3.0.0`, with exactly one normalized-obstacle `aerobeat.chart.flow.v3` chart and the frozen four-chart Boxing v1 recipe/ruleset matrix. Legacy package v1 fails with `flow_obstacle_reimport_required` rather than silently gaining collision.
 - Boxing chart hashes are recomputed from beats, recipe, ruleset, source hash, and—only when present—an exact normalized converter profile. Profile-authored packages bind the same profile across source provenance, top conversion trace, every Boxing trace and Boxing chart; legacy packages omit the key and retain their original hashes. Declared package and audio hashes are recomputed and compared through `@aerobeat/web-hash`, using its native fast path or deterministic bundled fallback without changing canonical bytes.
 - Audio and explicitly critical assets block readiness on absence, CORS/readability failure, or hash mismatch.
 - Background failure is cosmetic and produces an explicit CSS fallback with degradation truth.
