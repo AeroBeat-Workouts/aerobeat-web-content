@@ -140,6 +140,7 @@ await assert.rejects(() => validateRuntimePackage(backwardsIntervalPackage), has
 const maskMismatchPackage = structuredClone(basePackage);
 maskMismatchPackage.charts.find((chart) => chart.mode === "flow").beats = [{ start: 1, end: 2, type: "obstacle", sourceGeometry, gameplayGeometry, gridMask: [1] }];
 await assert.rejects(() => validateRuntimePackage(maskMismatchPackage), hasCode("flow_obstacle_invalid"));
+for(const mutate of [(beat)=>{beat.sourceGeometry.x=4;},(beat)=>{beat.gridMask=[0];},(beat)=>{beat.blockedCells=[0];},(beat)=>{beat.checkpoint.noseSafeCells=[0];},(beat)=>{beat.type="weave_left";}]){const mismatch=structuredClone(basePackage),boxingChart=mismatch.charts.find((chart)=>chart.mode==="boxing"),boxingObstacle=boxingChart.beats.find((beat)=>beat.type==="squat");mutate(boxingObstacle);await assert.rejects(()=>validateRuntimePackage(mismatch),hasCode("boxing_obstacle_invalid"),"Boxing interval, geometry, action, mask, blocked cells, and checkpoint must fail atomically on disagreement");}
 const tooManyObstacles = structuredClone(basePackage);
 tooManyObstacles.charts.find((chart) => chart.mode === "flow").beats = Array.from({ length: 129 }, (_, index) => ({ start: index, end: index + 0.5, type: "obstacle", sourceGeometry, gameplayGeometry, gridMask: [1,5,9] }));
 await assert.rejects(() => validateRuntimePackage(tooManyObstacles), hasCode("flow_obstacle_limit_exceeded"));
@@ -251,7 +252,7 @@ const badAudioRuntime = createAeroContentRuntime();
 await assert.rejects(() => badAudioRuntime.loadPackage({ package: basePackage, assets: [{ path: "song.ogg", bytes: new Uint8Array([1, 2, 3]) }] }), hasCode("asset_hash_mismatch"));
 assert.equal(badAudioRuntime.getSnapshot().state, "error");
 const badChartPackage = structuredClone(basePackage);
-badChartPackage.charts[0].beats[0].start = 99;
+badChartPackage.charts[0].beats[2].spatialTarget.targetCell = 6;
 await assert.rejects(() => createAeroContentRuntime().loadPackage({ package: badChartPackage, assets: [{ path: "song.ogg", bytes: audioBytes }] }), hasCode("chart_hash_mismatch"));
 
 const externalUrl = "https://community.example/maps/arbitrary-compatible-map.json";
@@ -423,7 +424,7 @@ async function makePackage(declaredAudioHash, converterProfile = null) {
   for (const recipeId of recipes) for (const rulesetId of rulesets) {
     const token = `${recipeId.startsWith("row") ? "row" : "cut"}-${rulesetId.includes("semantic") ? "semantic" : "spatial"}`;
     const beats = [
-      { start: 1, type: "squat", eventId: `${token}-squat`, sourceEventIds: ["source-squat"], blockedCells: [8, 9, 10, 11], checkpoint: { kind: "interval", noseSafeCells: [0, 1, 2, 3] } },
+      { start: 1, end: 2, type: "squat", eventId: `${token}-squat`, sourceEventIds: ["source-squat"], sourceGeometry: { schema:"aerobeat/obstacle_source_geometry",version:1,coordinateSpace:"beatsaber_v3_obstacle_rect",kind:"v3_rect",x:0,y:2,width:4,height:1 }, gameplayGeometry: { schema:"aerobeat/obstacle_gameplay_geometry",version:1,coordinateSpace:"aerobeat_top_left_grid",x:0,y:0,width:4,height:1 }, gridMask: [0, 1, 2, 3], blockedCells: [0, 1, 2, 3], checkpoint: { kind: "instantaneous", freshnessMs: 150, timingWindowMs: 180, noseSafeCells: [4, 5, 6, 7, 8, 9, 10, 11] } },
       { start: 2, type: "guard", eventId: `${token}-guard`, sourceEventIds: ["source-guard"], guardTarget: { leftCell: 4, rightCell: 7 }, checkpoint: { kind: "instantaneous" } },
       { start: 3, type: "straight_left", eventId: `${token}-punch-a`, sourceEventIds: ["source-punch-a"], spatialTarget: { targetCell: 5, acceptedSubcells: [20, 21], sourceCell: 9, qualificationMs: 100 } },
       { start: 4, type: "hook_right", eventId: `${token}-punch-b`, sourceEventIds: ["source-punch-b"], spatialTarget: { targetCell: 6, acceptedSubcells: [26, 27], sourceCell: 5, entryDirection: "left" } }

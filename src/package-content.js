@@ -303,8 +303,20 @@ function validateEvents(beats, boxing, bpm) {
     if (!Array.isArray(beat.sourceEventIds) || beat.sourceEventIds.length === 0 || beat.sourceEventIds.length > 64 || beat.sourceEventIds.some((entry) => typeof entry !== "string" || entry.length === 0 || entry.length > 512) || new Set(beat.sourceEventIds).size !== beat.sourceEventIds.length) throw dataError("event_lineage_invalid", "Boxing event lineage is required and must be unique");
     if (beat.sourceEventIds.some((entry) => lineageOwners.has(entry))) throw dataError("event_lineage_duplicate", "Source event lineage cannot identify multiple authored targets");
     for (const entry of beat.sourceEventIds) lineageOwners.add(entry);
+    if (/^(squat|weave_)/u.test(String(beat.type))) {
+      obstacleCount += 1;
+      if (obstacleCount > maximumObstaclesPerChart) throw dataError("boxing_obstacle_limit_exceeded", "Boxing chart exceeds the obstacle limit");
+      if (!Object.hasOwn(beat, "end") || Number(beat.end) <= Number(beat.start) || !isObstacleSourceGeometry(beat.sourceGeometry) || !isObstacleGameplayGeometry(beat.gameplayGeometry) || !isObstacleGridMask(beat.gridMask, /** @type {import("@aerobeat/web-contracts/obstacle-contracts").AeroObstacleGameplayGeometry} */ (beat.gameplayGeometry))) throw dataError("boxing_obstacle_invalid", `Event ${index} obstacle source/gameplay geometry, mask, or interval is invalid`);
+      if (canonicalJson(beat.blockedCells) !== canonicalJson(beat.gridMask) || obstacleActionForCells(/** @type {readonly number[]} */ (beat.gridMask)) !== beat.type) throw dataError("boxing_obstacle_invalid", `Event ${index} action and blocked cells must exactly match the normalized grid mask`);
+      const checkpoint = requireRecord(beat.checkpoint, "boxing_obstacle_invalid");
+      const expectedSafeCells = Array.from({ length: 12 }, (_, cell) => cell).filter((cell) => !/** @type {readonly number[]} */ (beat.gridMask).includes(cell));
+      if (checkpoint.kind !== "instantaneous" || canonicalJson(checkpoint.noseSafeCells) !== canonicalJson(expectedSafeCells)) throw dataError("boxing_obstacle_invalid", `Event ${index} checkpoint must retain the exact instantaneous normalized safe-cell complement`);
+    }
   }
 }
+
+/** @param {readonly number[]} cells */
+function obstacleActionForCells(cells) { let left=0,right=0; for(const cell of cells) cell%4<=1?left+=1:right+=1; return left>right?"weave_right":right>left?"weave_left":"squat"; }
 
 /** @param {unknown} beatValue @param {number} bpm @param {number} index @param {"start"|"end"} field */
 function requireBoundedEventTimestamp(beatValue, bpm, index, field) {
