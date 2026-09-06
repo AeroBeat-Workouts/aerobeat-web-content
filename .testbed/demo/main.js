@@ -15,16 +15,17 @@ class AeroContentRuntimeElement extends HTMLElement {
     const converterProfile = { schema: "aerobeat/prototype_profile", version: 1, profileId: "aero.converter.canonical", profileVersion: "1.0.0", class: "converter_regeneration", label: "Canonical Converter (Experimental)", experimental: true, settings: { guardRelocationRadius: 1, reachAllowanceSubcells: 0 }, contentHash: "a43b53a39c13c9e9efe59854aee0fa16efdcd3c6a29bc09f678d94b3fd8f0202" };
     const paletteBase = { schema: "aerobeat/authored_note_palette", version: 1, left: "#FF0000", right: "#808080", colorSpace: "srgb", alpha: 1, provenance: { kind: "difficulty_custom_data", infoFormat: "v4", infoHash: `sha256:${"3".repeat(64)}`, difficultyHash: `sha256:${"4".repeat(64)}`, fieldSet: "v4_custom", schemeIndex: null } };
     const notePalette = { ...paletteBase, paletteHash: `sha256:${await sha256(new TextEncoder().encode(canonical(paletteBase)))}` };
-    const charts = [];
+    const charts = [],boxingPunchTypes=["straight_left","straight_right","hook_left","hook_right","uppercut_left","uppercut_right"];
+    const boxingObstacle=(chartId,type,start,x)=>{const gridMask=[x,x+4,x+8],noseSafeCells=Array.from({length:12},(_,cell)=>cell).filter((cell)=>!gridMask.includes(cell));return {start,end:start+1,type,eventId:`${chartId}-${type}`,sourceEventIds:[`source-${type}`],sourceGeometry:{schema:"aerobeat/obstacle_source_geometry",version:1,coordinateSpace:"beatsaber_v3_obstacle_rect",kind:"v3_rect",x,y:0,width:1,height:3},gameplayGeometry:{schema:"aerobeat/obstacle_gameplay_geometry",version:1,coordinateSpace:"aerobeat_top_left_grid",x,y:0,width:1,height:3},gridMask,blockedCells:gridMask,checkpoint:{kind:"instantaneous",freshnessMs:150,timingWindowMs:180,noseSafeCells}};};
     for (const recipeId of ["row_family_balanced_height_v1", "cut_family_source_height_v1"]) {
       for (const rulesetId of ["boxing_semantic_track_v1", "boxing_spatial_grid_v1"]) {
         const chartId = `browser-${recipeId}-${rulesetId}`;
-        const boxingBeats=[{start:1,type:"straight_left",eventId:`${chartId}-left`,sourceEventIds:["source-left"],spatialTarget:{targetCell:5,acceptedSubcells:[20,21],sourceCell:9,qualificationMs:100}},{start:2,type:"hook_right",eventId:`${chartId}-right`,sourceEventIds:["source-right"],spatialTarget:{targetCell:6,acceptedSubcells:[26,27],sourceCell:5,entryDirection:"left"}},{start:3,type:"guard",eventId:`${chartId}-guard`,sourceEventIds:["source-guard"],guardTarget:{leftCell:4,rightCell:7},checkpoint:{kind:"instantaneous"}}];
+        const boxingBeats=[...boxingPunchTypes.map((type,index)=>({start:index+1,type,eventId:`${chartId}-${type}`,sourceEventIds:[`source-${type}`],spatialTarget:{targetCell:index%2===0?5:6,acceptedSubcells:index%2===0?[20,21]:[26,27],sourceCell:index%2===0?9:5,...(index%2===0?{qualificationMs:100}:{entryDirection:"left"})}})),{start:7,type:"guard",eventId:`${chartId}-guard`,sourceEventIds:["source-guard"],guardTarget:{leftCell:4,rightCell:7},checkpoint:{kind:"instantaneous"}},{start:8,end:9,type:"squat",eventId:`${chartId}-squat`,sourceEventIds:["source-squat"],sourceGeometry:{schema:"aerobeat/obstacle_source_geometry",version:1,coordinateSpace:"beatsaber_v3_obstacle_rect",kind:"v3_rect",x:0,y:2,width:4,height:1},gameplayGeometry:{schema:"aerobeat/obstacle_gameplay_geometry",version:1,coordinateSpace:"aerobeat_top_left_grid",x:0,y:0,width:4,height:1},gridMask:[0,1,2,3],blockedCells:[0,1,2,3],checkpoint:{kind:"instantaneous",freshnessMs:150,timingWindowMs:180,noseSafeCells:[4,5,6,7,8,9,10,11]}},boxingObstacle(chartId,"weave_left",9,3),boxingObstacle(chartId,"weave_right",10,0)];
         const contentHash = await sha256(new TextEncoder().encode(canonical({ beats: boxingBeats, recipeId, rulesetId, sourceHash, converterProfile })));
         charts.push({ schemaId: "aerobeat.chart.boxing.v1", schemaVersion: 1, recordVersion: 1, chartId, chartName: chartId, mode: "boxing", difficulty: "Expert", prototype: { contractId: "aerobeat.boxing.prototype.v1", recipeId, recipeVersion: "1", rulesetId, rulesetVersion: "1", sourceHash, recipeHash: `sha256:${"1".repeat(64)}`, rulesetHash: `sha256:${"2".repeat(64)}`, contentHash: `sha256:${contentHash}`, modifiers: [], converterProfile, regenerationRequiredFor: [] }, beats: boxingBeats });
       }
     }
-    const flowBeats = [{ start: 1, type: "note", hand: "left", placement: 4, direction: 1, requiresDirection: true }, { start: 2, end: 2.5, type: "obstacle", sourceGeometry:{schema:"aerobeat/obstacle_source_geometry",version:1,coordinateSpace:"beatsaber_v2_legacy_obstacle",kind:"v2_type_1",x:1,y:2,width:1,height:3},gameplayGeometry:{schema:"aerobeat/obstacle_gameplay_geometry",version:1,coordinateSpace:"aerobeat_top_left_grid",x:1,y:0,width:1,height:3},gridMask:[1,5,9] }];
+    const flowBeats = [{ start: 1, type: "note", hand: "left", placement: 4, direction: 1, requiresDirection: true }, { start: 2, end: 2.5, type: "obstacle", sourceGeometry:{schema:"aerobeat/obstacle_source_geometry",version:1,coordinateSpace:"beatsaber_v2_legacy_obstacle",kind:"v2_type_1",x:1,y:2,width:1,height:3},gameplayGeometry:{schema:"aerobeat/obstacle_gameplay_geometry",version:1,coordinateSpace:"aerobeat_top_left_grid",x:1,y:0,width:1,height:3},gridMask:[1,5,9] }, { start: 3, type: "bomb", placement: 6 }];
     const flowPalette = { source: "package", paletteHash: notePalette.paletteHash };
     const flowContentHash = `sha256:${await sha256(new TextEncoder().encode(canonical({ beats: flowBeats, rulesetId: "flow_grid_v2", notePalette: flowPalette })))}`;
     charts.push({ schemaId: "aerobeat.chart.flow.v4", schemaVersion: 4, recordVersion: 2, rulesetId: "flow_grid_v2", chartId: "browser-flow", chartName: "Browser Flow", mode: "flow", difficulty: "Expert", notePalette: flowPalette, contentHash: flowContentHash, beats: flowBeats });
@@ -47,10 +48,12 @@ class AeroContentRuntimeElement extends HTMLElement {
     if (snapshot.state !== "ready") throw new Error("Runtime instances were not isolated");
     const note = snapshot.resolvedEvents.find((event) => event.authoredBeat.type === "note");
     const obstacle = snapshot.resolvedEvents.find((event) => event.authoredBeat.type === "obstacle");
-    if (!note || !obstacle) throw new Error("Browser interval fixture did not resolve");
+    const bomb = snapshot.resolvedEvents.find((event) => event.authoredBeat.type === "bomb");
+    if (!note || !obstacle || !bomb) throw new Error("Browser interval fixture did not resolve");
     const projectionSymbol = Symbol.for("aerobeat.web-content.internal-render-projection");
     const projectedNote = second[projectionSymbol]().find((event) => event.authoredBeat.type === "note");
     const projectedObstacle = second[projectionSymbol]().find((event) => event.authoredBeat.type === "obstacle");
+    const projectedBomb = second[projectionSymbol]().find((event) => event.authoredBeat.type === "bomb");
     this.dataset.ready = "true";
     this.dataset.noteCenterMs = String(note.centerTimestampMs);
     this.dataset.intervalStartMs = String(obstacle.centerTimestampMs);
@@ -72,12 +75,12 @@ class AeroContentRuntimeElement extends HTMLElement {
     } });
     const handle = { schema: "aerobeat/persistence_handle", version: 1, storage: "memory", namespace: "browser.authored", key: "browser-package", packageId: packageRecord.packageId, packageHash: { schema: "aerobeat/content_hash", version: 1, algorithm: "sha256", value: packageHash } };
     await persistence.loadPersistenceHandle(handle, { assetHashes: { "song.ogg": audioHash } });
-    const boxing = snapshot.variants.find((variant) => variant.mode === "boxing");
-    if (!boxing) throw new Error("Browser composite fixture is missing");
-    await second.selectVariant(boxing.variantId, { modifierIds: ["no_squats"] });
-    const boxingProjection=second[projectionSymbol](),boxingPublic=second.getSnapshot().resolvedEvents;
-    const projectedBoxingPunchColors=boxingProjection.filter((event)=>/^(?:straight|hook|uppercut)_(?:left|right)$/u.test(String(event.authoredBeat.type))).map((event)=>[event.authoredBeat.type,event.appearanceColor]);
-    const projectedBoxingGuard=boxingProjection.find((event)=>event.authoredBeat.type==="guard");
+    const boxingVariants = snapshot.variants.filter((variant) => variant.mode === "boxing");
+    if (boxingVariants.length!==4) throw new Error("Browser Boxing variant matrix is incomplete");
+    second.setPlaybackState({state:"paused",positionMs:0});await second.swapFutureVariant(boxingVariants[0].variantId,{modifierIds:["no_squats"]});const swappedCompositeKind=second.getSnapshot().selectedVariant.provenance.kind;
+    const boxingVariantEvidence=[];
+    for(const variant of boxingVariants){await second.selectVariant(variant.variantId);const projection=second[projectionSymbol](),publicEvents=second.getSnapshot().resolvedEvents;boxingVariantEvidence.push({rulesetId:variant.rulesetId,recipeId:variant.recipeId,punchColors:projection.filter((event)=>boxingPunchTypes.includes(event.authoredBeat.type)).map((event)=>[event.authoredBeat.type,event.appearanceColor]),fixed:projection.filter((event)=>["guard","squat","weave_left","weave_right"].includes(event.authoredBeat.type)).map((event)=>[event.authoredBeat.type,Object.hasOwn(event,"appearanceColor")]),publicHasAppearance:publicEvents.some((event)=>Object.hasOwn(event,"appearanceColor"))});}
+    const boxingPublic=second.getSnapshot().resolvedEvents;
     globalThis.__contentHashEvidence = Object.freeze({
       isSecureContext,
       subtleType: typeof globalThis.crypto?.subtle,
@@ -89,11 +92,11 @@ class AeroContentRuntimeElement extends HTMLElement {
       persistedAssetMatches: persistence.readAsset("song.ogg").every((byte, index) => byte === audio[index]),
       largeAssetBytes: second.readAsset("large.bin").byteLength,
       largeAssetMatches: second.readAsset("large.bin").every((byte, index) => byte === largeView[index]),
-      compositeKind: second.getSnapshot().selectedVariant.provenance.kind,
+      compositeKind: swappedCompositeKind,
       projectedNoteColor: projectedNote?.appearanceColor ?? null,
       projectedObstacleHasColor: Object.hasOwn(projectedObstacle ?? {}, "appearanceColor"),
-      projectedBoxingPunchColors,
-      projectedBoxingGuardHasColor:Object.hasOwn(projectedBoxingGuard??{},"appearanceColor"),
+      projectedBombHasColor: Object.hasOwn(projectedBomb ?? {}, "appearanceColor"),
+      boxingVariantEvidence,
       publicHasPaletteLeak: JSON.stringify(snapshot).includes("#FF0000") || JSON.stringify(snapshot).includes(notePalette.paletteHash) || Object.hasOwn(note, "appearanceColor") || boxingPublic.some((event)=>Object.hasOwn(event,"appearanceColor")),
       projectionEnumerable: Object.getOwnPropertyDescriptor(second, projectionSymbol)?.enumerable ?? null,
       destroyedState: (second.destroy(), second.getSnapshot().state)

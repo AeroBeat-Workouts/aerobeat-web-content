@@ -68,8 +68,9 @@ async function verifyContext(origin, secure) {
     assert.equal(evidence.compositeKind, "runtime_composite");
     assert.equal(evidence.projectedNoteColor, "#FF0000");
     assert.equal(evidence.projectedObstacleHasColor, false);
-    assert.deepEqual(evidence.projectedBoxingPunchColors,[["straight_left","#FF0000"],["hook_right","#808080"]]);
-    assert.equal(evidence.projectedBoxingGuardHasColor,false);
+    assert.equal(evidence.projectedBombHasColor, false);
+    const expectedPunches=[["straight_left","#FF0000"],["straight_right","#808080"],["hook_left","#FF0000"],["hook_right","#808080"],["uppercut_left","#FF0000"],["uppercut_right","#808080"]],expectedFixed=[["guard",false],["squat",false],["weave_left",false],["weave_right",false]];
+    assert.equal(evidence.boxingVariantEvidence.length,4);assert.deepEqual(evidence.boxingVariantEvidence.map((entry)=>entry.rulesetId),["boxing_semantic_track_v1","boxing_spatial_grid_v1","boxing_semantic_track_v1","boxing_spatial_grid_v1"]);for(const entry of evidence.boxingVariantEvidence){assert.deepEqual(entry.punchColors,expectedPunches,`six exact Boxing punches receive song colors in ${entry.rulesetId}`);assert.deepEqual(entry.fixed,expectedFixed,`guards and three obstacle types remain fixed in ${entry.rulesetId}`);assert.equal(entry.publicHasAppearance,false);}
     assert.equal(evidence.publicHasPaletteLeak, false);
     assert.equal(evidence.projectionEnumerable, false);
     assert.equal(evidence.destroyedState, "destroyed");
