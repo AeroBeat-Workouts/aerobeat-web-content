@@ -140,7 +140,7 @@ assert.equal(paletteRuntime[projectionSymbol]().find((event) => event.eventId ==
 const paletteBoxingId = paletteRuntime.getSnapshot().variants.find((variant) => variant.mode === "boxing").variantId;
 await paletteRuntime.swapFutureVariant(paletteBoxingId);
 assert.equal(paletteRuntime[projectionSymbol]().find((event) => event.eventId === preservedPaletteNote?.eventId)?.appearanceColor, "#FF0000", "cross-mode swaps retain appearance for preserved Flow notes");
-assert.equal(paletteRuntime[projectionSymbol]().filter((event) => event.variantId === paletteBoxingId).every((event) => !Object.hasOwn(event, "appearanceColor")), true, "cross-mode replacement never colors Boxing targets");
+const paletteBoxingEvents=paletteRuntime[projectionSymbol]().filter((event)=>event.variantId===paletteBoxingId);assert.deepEqual(paletteBoxingEvents.filter((event)=>Object.hasOwn(event,"appearanceColor")).map((event)=>[event.authoredBeat.type,event.appearanceColor]),[["straight_left","#FF0000"],["hook_right","#808080"]],"cross-mode replacement colors only Boxing punch cues by authored hand");assert.equal(paletteBoxingEvents.filter((event)=>!/^(?:straight|hook|uppercut)_(?:left|right)$/u.test(String(event.authoredBeat.type))).every((event)=>!Object.hasOwn(event,"appearanceColor")),true,"Boxing body/guard obstacles remain fixed-color");
 const stalePaletteEvents = paletteRuntime[projectionSymbol]();
 await paletteRuntime.loadPackage({ package: basePackage, assets: [{ path: "song.ogg", bytes: audioBytes }] });
 assert.notEqual(paletteRuntime[projectionSymbol](), stalePaletteEvents);
@@ -372,7 +372,7 @@ assert.equal(snapshot.resolvedEvents.some((event) => event.authoredBeat.type ===
 const crossed = snapshot.resolvedEvents.find((event) => event.authoredBeat.type === "guard");
 assert.equal(crossed.authoredBeat.guardTarget.crossed, true);
 assert.deepEqual(crossed.authoredBeat.sourceEventIds, ["source-guard"]);
-assert.equal(runtime[projectionSymbol]().every((event) => !Object.hasOwn(event, "appearanceColor")), true, "Boxing guards, punches, squat, and weave projections never receive Flow appearance colors");
+const boxingRenderEvents=runtime[projectionSymbol]();assert.deepEqual(boxingRenderEvents.filter((event)=>Object.hasOwn(event,"appearanceColor")).map((event)=>[event.authoredBeat.type,event.appearanceColor]),[["straight_left","#2693FF"],["hook_right","#39C96B"]],"Boxing punch cues receive effective fallback colors by left/right hand");assert.equal(boxingRenderEvents.filter((event)=>["guard","squat","weave_right"].includes(event.authoredBeat.type)).every((event)=>!Object.hasOwn(event,"appearanceColor")),true,"Boxing guards and body obstacles remain fixed-color");assert.equal(snapshot.resolvedEvents.every((event)=>!Object.hasOwn(event,"appearanceColor")),true,"Boxing appearance remains private to the renderer projection");
 const emittedPackage = structuredClone(basePackage);
 emittedPackage.charts[0].prototype.modifiers = ["crossed_guard"];
 const emittedRuntime = createAeroContentRuntime();

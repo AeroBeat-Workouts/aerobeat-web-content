@@ -181,7 +181,7 @@ export function createAeroContentRuntime(options = {}) {
       const replacement = future.filter((event) => Number(event.centerTimestampMs) >= playbackPositionMs && !preservedIds.has(String(event.eventId)) && eventTargetKeys(event).every((key) => !preservedTargets.has(key)));
       resolvedEvents = Object.freeze([...preserved, ...replacement].sort((left, right) => Number(left.centerTimestampMs) - Number(right.centerTimestampMs) || compareCodePoints(String(left.eventId), String(right.eventId))));
       selectedVariant = target;
-      renderEvents = projectRenderEvents(resolvedEvents, (event) => eventBelongsToFlow(event, target), requireEffectivePalette());
+      renderEvents = projectRenderEvents(resolvedEvents, (event) => modeForEvent(event, target), requireEffectivePalette());
       publish();
       return target;
     },
@@ -276,15 +276,15 @@ export function createAeroContentRuntime(options = {}) {
   }
   function clearLoaded() { assets = []; variantById.clear(); composedVariants.clear(); selectedVariant = null; resolvedEvents = Object.freeze([]); renderEvents = Object.freeze([]); loadedPackage = null; loadedBeatToTimelineMs = null; effectiveNotePalette = null; packageId = null; packageHash = null; contentLineage = null; themeSnapshot = null; backgroundSnapshot = fallbackBackground(); playbackState = "idle"; playbackPositionMs = 0; judgedEventIds.clear(); activeEventIds.clear(); }
   /** @param {readonly DataRecord[]} events @param {RuntimeVariant | null} variant */
-  function setResolvedEvents(events, variant) { resolvedEvents = events; renderEvents = variant ? projectRenderEvents(events, (event) => eventBelongsToFlow(event, variant), requireEffectivePalette()) : Object.freeze([]); }
-  /** @param {DataRecord} event @param {RuntimeVariant} current */
-  function eventBelongsToFlow(event, current) {
+  function setResolvedEvents(events, variant) { resolvedEvents = events; renderEvents = variant ? projectRenderEvents(events, (event) => modeForEvent(event, variant), requireEffectivePalette()) : Object.freeze([]); }
+  /** @param {DataRecord} event @param {RuntimeVariant} current @returns {"flow"|"boxing"|null} */
+  function modeForEvent(event, current) {
     const variantId = String(event.variantId);
-    if (current.variantId === variantId) return current.mode === "flow";
+    if (current.variantId === variantId) return current.mode;
     const authored = variantById.get(variantId);
-    if (authored) return authored.mode === "flow";
-    for (const composed of composedVariants.values()) if (composed.variantId === variantId) return composed.mode === "flow";
-    return false;
+    if (authored) return authored.mode;
+    for (const composed of composedVariants.values()) if (composed.variantId === variantId) return composed.mode;
+    return null;
   }
   function requireTimingMapper() { if (!loadedBeatToTimelineMs) throw dataError("song_timing_invalid", "Validated song timing is unavailable"); return loadedBeatToTimelineMs; }
   function requireEffectivePalette() { if (!effectiveNotePalette) throw dataError("effective_note_palette_invalid", "Validated effective note palette is unavailable"); return effectiveNotePalette; }
@@ -428,12 +428,15 @@ function timelineFor(variant, beatToTimelineMs) {
     });
   }).sort((left, right) => left.centerTimestampMs - right.centerTimestampMs || compareCodePoints(left.eventId, right.eventId)));
 }
-/** @param {readonly DataRecord[]} events @param {(event:DataRecord)=>boolean} isFlowEvent @param {import("@aerobeat/web-contracts").AeroEffectiveNotePalette} palette */
-function projectRenderEvents(events, isFlowEvent, palette) {
+/** @param {readonly DataRecord[]} events @param {(event:DataRecord)=>"flow"|"boxing"|null} modeFor @param {import("@aerobeat/web-contracts").AeroEffectiveNotePalette} palette */
+function projectRenderEvents(events, modeFor, palette) {
   return Object.freeze(events.map((event) => {
-    const beat = isPlainDataRecord(event.authoredBeat) ? event.authoredBeat : null;
-    if (!isFlowEvent(event) || !beat || beat.type !== "note" || (beat.hand !== "left" && beat.hand !== "right") || (beat.requiresDirection !== true && beat.requiresDirection !== false)) return event;
-    return Object.freeze({ ...event, appearanceColor: beat.hand === "left" ? palette.left : palette.right });
+    const beat = isPlainDataRecord(event.authoredBeat) ? event.authoredBeat : null,mode=modeFor(event);
+    /** @type {"left"|"right"|null} */ let hand=null;
+    if(mode==="flow"&&beat?.type==="note"&&(beat.hand==="left"||beat.hand==="right")&&(beat.requiresDirection===true||beat.requiresDirection===false))hand=beat.hand;
+    else if(mode==="boxing"&&beat){const match=/^(?:straight|hook|uppercut)_(left|right)$/u.exec(String(beat.type));if(match)hand=/** @type {"left"|"right"} */(match[1]);}
+    if(hand!=="left"&&hand!=="right")return event;
+    return Object.freeze({ ...event, appearanceColor: hand === "left" ? palette.left : palette.right });
   }));
 }
 /** @param {DataRecord} event @returns {string[]} */

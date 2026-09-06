@@ -68,6 +68,8 @@ async function verifyContext(origin, secure) {
     assert.equal(evidence.compositeKind, "runtime_composite");
     assert.equal(evidence.projectedNoteColor, "#FF0000");
     assert.equal(evidence.projectedObstacleHasColor, false);
+    assert.deepEqual(evidence.projectedBoxingPunchColors,[["straight_left","#FF0000"],["hook_right","#808080"]]);
+    assert.equal(evidence.projectedBoxingGuardHasColor,false);
     assert.equal(evidence.publicHasPaletteLeak, false);
     assert.equal(evidence.projectionEnumerable, false);
     assert.equal(evidence.destroyedState, "destroyed");

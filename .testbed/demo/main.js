@@ -19,8 +19,9 @@ class AeroContentRuntimeElement extends HTMLElement {
     for (const recipeId of ["row_family_balanced_height_v1", "cut_family_source_height_v1"]) {
       for (const rulesetId of ["boxing_semantic_track_v1", "boxing_spatial_grid_v1"]) {
         const chartId = `browser-${recipeId}-${rulesetId}`;
-        const contentHash = await sha256(new TextEncoder().encode(canonical({ beats: [], recipeId, rulesetId, sourceHash, converterProfile })));
-        charts.push({ schemaId: "aerobeat.chart.boxing.v1", schemaVersion: 1, recordVersion: 1, chartId, chartName: chartId, mode: "boxing", difficulty: "Expert", prototype: { contractId: "aerobeat.boxing.prototype.v1", recipeId, recipeVersion: "1", rulesetId, rulesetVersion: "1", sourceHash, recipeHash: `sha256:${"1".repeat(64)}`, rulesetHash: `sha256:${"2".repeat(64)}`, contentHash: `sha256:${contentHash}`, modifiers: [], converterProfile, regenerationRequiredFor: [] }, beats: [] });
+        const boxingBeats=[{start:1,type:"straight_left",eventId:`${chartId}-left`,sourceEventIds:["source-left"],spatialTarget:{targetCell:5,acceptedSubcells:[20,21],sourceCell:9,qualificationMs:100}},{start:2,type:"hook_right",eventId:`${chartId}-right`,sourceEventIds:["source-right"],spatialTarget:{targetCell:6,acceptedSubcells:[26,27],sourceCell:5,entryDirection:"left"}},{start:3,type:"guard",eventId:`${chartId}-guard`,sourceEventIds:["source-guard"],guardTarget:{leftCell:4,rightCell:7},checkpoint:{kind:"instantaneous"}}];
+        const contentHash = await sha256(new TextEncoder().encode(canonical({ beats: boxingBeats, recipeId, rulesetId, sourceHash, converterProfile })));
+        charts.push({ schemaId: "aerobeat.chart.boxing.v1", schemaVersion: 1, recordVersion: 1, chartId, chartName: chartId, mode: "boxing", difficulty: "Expert", prototype: { contractId: "aerobeat.boxing.prototype.v1", recipeId, recipeVersion: "1", rulesetId, rulesetVersion: "1", sourceHash, recipeHash: `sha256:${"1".repeat(64)}`, rulesetHash: `sha256:${"2".repeat(64)}`, contentHash: `sha256:${contentHash}`, modifiers: [], converterProfile, regenerationRequiredFor: [] }, beats: boxingBeats });
       }
     }
     const flowBeats = [{ start: 1, type: "note", hand: "left", placement: 4, direction: 1, requiresDirection: true }, { start: 2, end: 2.5, type: "obstacle", sourceGeometry:{schema:"aerobeat/obstacle_source_geometry",version:1,coordinateSpace:"beatsaber_v2_legacy_obstacle",kind:"v2_type_1",x:1,y:2,width:1,height:3},gameplayGeometry:{schema:"aerobeat/obstacle_gameplay_geometry",version:1,coordinateSpace:"aerobeat_top_left_grid",x:1,y:0,width:1,height:3},gridMask:[1,5,9] }];
@@ -74,6 +75,9 @@ class AeroContentRuntimeElement extends HTMLElement {
     const boxing = snapshot.variants.find((variant) => variant.mode === "boxing");
     if (!boxing) throw new Error("Browser composite fixture is missing");
     await second.selectVariant(boxing.variantId, { modifierIds: ["no_squats"] });
+    const boxingProjection=second[projectionSymbol](),boxingPublic=second.getSnapshot().resolvedEvents;
+    const projectedBoxingPunchColors=boxingProjection.filter((event)=>/^(?:straight|hook|uppercut)_(?:left|right)$/u.test(String(event.authoredBeat.type))).map((event)=>[event.authoredBeat.type,event.appearanceColor]);
+    const projectedBoxingGuard=boxingProjection.find((event)=>event.authoredBeat.type==="guard");
     globalThis.__contentHashEvidence = Object.freeze({
       isSecureContext,
       subtleType: typeof globalThis.crypto?.subtle,
@@ -88,7 +92,9 @@ class AeroContentRuntimeElement extends HTMLElement {
       compositeKind: second.getSnapshot().selectedVariant.provenance.kind,
       projectedNoteColor: projectedNote?.appearanceColor ?? null,
       projectedObstacleHasColor: Object.hasOwn(projectedObstacle ?? {}, "appearanceColor"),
-      publicHasPaletteLeak: JSON.stringify(snapshot).includes("#FF0000") || JSON.stringify(snapshot).includes(notePalette.paletteHash) || Object.hasOwn(note, "appearanceColor"),
+      projectedBoxingPunchColors,
+      projectedBoxingGuardHasColor:Object.hasOwn(projectedBoxingGuard??{},"appearanceColor"),
+      publicHasPaletteLeak: JSON.stringify(snapshot).includes("#FF0000") || JSON.stringify(snapshot).includes(notePalette.paletteHash) || Object.hasOwn(note, "appearanceColor") || boxingPublic.some((event)=>Object.hasOwn(event,"appearanceColor")),
       projectionEnumerable: Object.getOwnPropertyDescriptor(second, projectionSymbol)?.enumerable ?? null,
       destroyedState: (second.destroy(), second.getSnapshot().state)
     });
