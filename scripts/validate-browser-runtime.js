@@ -52,8 +52,9 @@ async function verifyContext(origin, secure) {
     catch (cause) { throw new Error(`Browser runtime did not become ready: ${consoleFailures.join(" | ") || (cause instanceof Error ? cause.message : "unknown failure")}`); }
     const runtime = page.locator("aero-content-runtime");
     assert.match(await runtime.innerText(), /aero\.content\.library · implemented · 5 variants/u);
-    assert.equal(await runtime.getAttribute("data-interval-start-ms"), "1000");
-    assert.equal(await runtime.getAttribute("data-interval-end-ms"), "1250");
+    assert.equal(await runtime.getAttribute("data-note-center-ms"), "700", "browser note timing includes anchor and stop at S <= beat");
+    assert.equal(await runtime.getAttribute("data-interval-start-ms"), "1200", "browser interval start crosses the anchored stopped first tempo segment");
+    assert.equal(await runtime.getAttribute("data-interval-end-ms"), "1700", "browser interval end uses the later tempo segment through the same mapper");
     assert.equal(await runtime.getAttribute("data-interval-frozen"), "true");
     assert.equal(await runtime.getAttribute("data-instant-keys"), "schema,version,eventId,variantId,chartId,centerTimestampMs,authoredBeat");
     const evidence = await page.evaluate(() => globalThis.__contentHashEvidence);
@@ -65,6 +66,10 @@ async function verifyContext(origin, secure) {
     assert.equal(evidence.largeAssetBytes, 4 * 1024 * 1024);
     assert.equal(evidence.largeAssetMatches, true);
     assert.equal(evidence.compositeKind, "runtime_composite");
+    assert.equal(evidence.projectedNoteColor, "#FF0000");
+    assert.equal(evidence.projectedObstacleHasColor, false);
+    assert.equal(evidence.publicHasPaletteLeak, false);
+    assert.equal(evidence.projectionEnumerable, false);
     assert.equal(evidence.destroyedState, "destroyed");
     assert.deepEqual(consoleFailures, []);
     return evidence;

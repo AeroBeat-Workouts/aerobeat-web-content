@@ -2,6 +2,11 @@
 
 import { serviceIds } from "@aerobeat/web-contracts";
 
+export {
+  authoredBeatToTimelineMs,
+  createAuthoredBeatToTimelineMs,
+  maximumAuthoredTimelineMs
+} from "@aerobeat/web-contracts";
 export { aeroContentRuntimeCapabilities, createAeroContentRuntime } from "./content-runtime.js";
 export { composeRuntimeVariant, validateRuntimePackage } from "./package-content.js";
 

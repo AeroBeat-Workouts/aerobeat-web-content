@@ -6,8 +6,11 @@ import {
   aeroContentRuntimeCapabilities,
   aeroContentRuntimeDescriptor,
   aeroContentServiceId,
+  authoredBeatToTimelineMs,
   composeRuntimeVariant,
   createAeroContentRuntime,
+  createAuthoredBeatToTimelineMs,
+  maximumAuthoredTimelineMs,
   validateRuntimePackage
 } from "../src/index.js";
 import { cloneFrozenData } from "../src/runtime-data.js";
@@ -24,6 +27,22 @@ const reachConverterProfile = Object.freeze({ schema: "aerobeat/prototype_profil
 assert.equal(aeroContentServiceId, "aero.content.library");
 assert.equal(aeroContentRuntimeDescriptor.implementationState, "implemented");
 assert.equal(aeroContentRuntimeCapabilities.playlistAllowlistRequired, false);
+assert.equal(maximumAuthoredTimelineMs, 86_400_000);
+const canonicalTiming = { anchorMs: 250, tempoSegments: [{ startBeat: 0, bpm: 120 }, { startBeat: 4, bpm: 60 }, { startBeat: 8, bpm: 240 }], stopSegments: [{ startBeat: 2, durationMs: 125 }, { startBeat: 6, durationMs: 375 }], timeSignatureSegments: [{ startBeat: 0, numerator: 4, denominator: 4 }] };
+const canonicalMapper = createAuthoredBeatToTimelineMs(canonicalTiming);
+assert.equal(authoredBeatToTimelineMs({ anchorMs: 0, tempoSegments: [{ startBeat: 0, bpm: 120 }], stopSegments: [], timeSignatureSegments: [{ startBeat: 0, numerator: 4, denominator: 4 }] }, 3), 1500, "constant timing uses the contract authority");
+assert.equal(canonicalMapper(2), 1375, "a stop contributes inclusively at S <= b");
+assert.equal(canonicalMapper(6), 4750, "anchor, cross-segment tempo, and ordered stops compose exactly");
+assert.equal(canonicalMapper(9), 7000, "the final tempo segment extends to the target");
+canonicalTiming.tempoSegments[0].bpm = 1;
+canonicalTiming.stopSegments[0].durationMs = 999;
+assert.equal(canonicalMapper(6), 4750, "the mapper snapshots timing before caller mutation");
+for (const malformed of [
+  { anchorMs: 0, tempoSegments: [{ startBeat: 1, bpm: 120 }], stopSegments: [], timeSignatureSegments: [{ startBeat: 0, numerator: 4, denominator: 4 }] },
+  { anchorMs: 0, tempoSegments: [{ startBeat: 0, bpm: 120 }, { startBeat: 0, bpm: 90 }], stopSegments: [], timeSignatureSegments: [{ startBeat: 0, numerator: 4, denominator: 4 }] },
+  { anchorMs: 0, tempoSegments: [{ startBeat: 0, bpm: 120 }], stopSegments: [{ startBeat: 2, durationMs: 1 }, { startBeat: 2, durationMs: 1 }], timeSignatureSegments: [{ startBeat: 0, numerator: 4, denominator: 4 }] },
+  { anchorMs: 0, tempoSegments: [{ startBeat: 0, bpm: 120 }], stopSegments: [{ startBeat: 1, durationMs: 0 }], timeSignatureSegments: [{ startBeat: 0, numerator: 4, denominator: 4 }] }
+]) assert.throws(() => createAuthoredBeatToTimelineMs(malformed), TypeError);
 const legacyValidation = await validateRuntimePackage(basePackage);
 assert.equal(legacyValidation.variants.length, 5);
 assert.throws(() => cloneFrozenData(Array(100_000).fill(null)), hasCode("data_too_large"), "generic data cloning must retain its 100,000-item default");
@@ -69,6 +88,122 @@ assert.equal(Object.isFrozen(snapshot.variants), true);
 assert.equal(JSON.stringify(snapshot).includes("deterministic-audio-fixture"), false);
 assert.deepEqual(runtime.readAsset("SONG.OGG"), audioBytes);
 assert.ok(listenerCalls >= 2);
+const projectionSymbol = Symbol.for("aerobeat.web-content.internal-render-projection");
+const projectionDescriptor = Object.getOwnPropertyDescriptor(runtime, projectionSymbol);
+assert.deepEqual({ enumerable: projectionDescriptor?.enumerable, writable: projectionDescriptor?.writable, configurable: projectionDescriptor?.configurable }, { enumerable: false, writable: false, configurable: false });
+assert.equal(Object.keys(runtime).some((key) => key.includes("render")), false, "the internal renderer seam is not a public string-keyed API");
+const defaultRenderEvents = runtime[projectionSymbol]();
+assert.equal(defaultRenderEvents.some((event) => Object.hasOwn(event, "appearanceColor")), true);
+assert.equal(defaultRenderEvents.find((event) => event.authoredBeat.type === "note")?.appearanceColor, "#2693FF");
+assert.equal(Object.hasOwn(runtime.getSnapshot().resolvedEvents.find((event) => event.authoredBeat.type === "note"), "appearanceColor"), false);
+
+const palettePackage = withPalette(basePackage, "#FF0000", "#808080");
+const baseFlowIdentity = (await validateRuntimePackage(basePackage)).variants.find((variant) => variant.mode === "flow");
+const paletteFlowIdentity = (await validateRuntimePackage(palettePackage)).variants.find((variant) => variant.mode === "flow");
+assert.ok(baseFlowIdentity && paletteFlowIdentity);
+assert.notDeepEqual(paletteFlowIdentity.mapHash, baseFlowIdentity.mapHash, "Flow visual hash may bind palette changes");
+assert.deepEqual(paletteFlowIdentity.scoreIdentityHash, baseFlowIdentity.scoreIdentityHash, "Flow palette must not change scoring identity");
+const [baseFlowCompositeIdentity, paletteFlowCompositeIdentity] = await Promise.all([composeRuntimeVariant(baseFlowIdentity, ["no_obstacles"], basePackage.packageId), composeRuntimeVariant(paletteFlowIdentity, ["no_obstacles"], palettePackage.packageId)]);
+assert.deepEqual(paletteFlowCompositeIdentity.scoreIdentityHash, baseFlowCompositeIdentity.scoreIdentityHash, "runtime-composite Flow palette must not change scoring identity");
+assert.notDeepEqual(paletteFlowCompositeIdentity.mapHash, baseFlowCompositeIdentity.mapHash, "runtime-composite visual hash may bind palette changes");
+const paletteFlow = palettePackage.charts.find((chart) => chart.mode === "flow");
+paletteFlow.beats = [
+  { start: 1, type: "note", hand: "left", placement: 4, direction: 1, requiresDirection: true },
+  { start: 2, type: "note", hand: "right", placement: 7, direction: 8, requiresDirection: false },
+  { start: 3, type: "note", hand: "left", placement: 5, direction: 1 },
+  { start: 4, type: "note", hand: "center", placement: 6, direction: 1, requiresDirection: true },
+  { start: 5, type: "bomb", placement: 6 },
+  { start: 6, end: 7, type: "arc", hand: "left", placement: 4, tailPlacement: 5, direction: 1 },
+  { start: 8, end: 9, type: "burst", hand: "right", placement: 7, tailPlacement: 6, direction: 0 },
+  { start: 10, end: 11, type: "obstacle", sourceGeometry, gameplayGeometry, gridMask: [1,5,9] }
+];
+rehashFlow(palettePackage);
+const paletteRuntime = createAeroContentRuntime();
+await paletteRuntime.loadPackage({ package: palettePackage, assets: [{ path: "song.ogg", bytes: audioBytes }] });
+const paletteRenderEvents = paletteRuntime[projectionSymbol]();
+assert.deepEqual(paletteRenderEvents.filter((event) => Object.hasOwn(event, "appearanceColor")).map((event) => event.appearanceColor), ["#FF0000", "#808080"]);
+const privateLeft = paletteRenderEvents.find((event) => event.appearanceColor === "#FF0000");
+const publicLeft = paletteRuntime.getSnapshot().resolvedEvents.find((event) => event.eventId === privateLeft?.eventId);
+assert.deepEqual(Object.keys(privateLeft).filter((key) => !Object.keys(publicLeft).includes(key)), ["appearanceColor"], "private eligible events add exactly one appearance field");
+const privateBomb = paletteRenderEvents.find((event) => event.authoredBeat.type === "bomb");
+const publicBomb = paletteRuntime.getSnapshot().resolvedEvents.find((event) => event.eventId === privateBomb?.eventId);
+assert.equal(privateBomb, publicBomb, "ineligible private events retain the exact public frozen event without added fields");
+assert.equal(paletteRenderEvents.filter((event) => ["bomb", "arc", "burst", "obstacle"].includes(event.authoredBeat.type)).every((event) => !Object.hasOwn(event, "appearanceColor")), true);
+const publicPaletteJson = JSON.stringify(paletteRuntime.getSnapshot());
+for (const privateToken of ["#FF0000", "#808080", palettePackage.notePalette.paletteHash, "aerobeat/authored_note_palette", "difficulty_custom_data", "v2_custom"]) assert.equal(publicPaletteJson.includes(privateToken), false, `public snapshot must not leak ${privateToken}`);
+const paletteFlowId = paletteRuntime.getSnapshot().selectedVariant.variantId;
+paletteRuntime.setPlaybackState({ state: "paused", positionMs: 1_250 });
+const preservedPaletteNote = paletteRuntime[projectionSymbol]().find((event) => event.centerTimestampMs < 1_250 && event.appearanceColor === "#FF0000");
+await paletteRuntime.swapFutureVariant(paletteFlowId, { modifierIds: ["no_obstacles"] });
+assert.equal(paletteRuntime[projectionSymbol]().some((event) => event.authoredBeat.type === "obstacle"), false);
+assert.equal(paletteRuntime[projectionSymbol]().find((event) => event.eventId === preservedPaletteNote?.eventId)?.appearanceColor, "#FF0000", "future swaps retain the generation-effective palette without public leakage");
+const paletteBoxingId = paletteRuntime.getSnapshot().variants.find((variant) => variant.mode === "boxing").variantId;
+await paletteRuntime.swapFutureVariant(paletteBoxingId);
+assert.equal(paletteRuntime[projectionSymbol]().find((event) => event.eventId === preservedPaletteNote?.eventId)?.appearanceColor, "#FF0000", "cross-mode swaps retain appearance for preserved Flow notes");
+assert.equal(paletteRuntime[projectionSymbol]().filter((event) => event.variantId === paletteBoxingId).every((event) => !Object.hasOwn(event, "appearanceColor")), true, "cross-mode replacement never colors Boxing targets");
+const stalePaletteEvents = paletteRuntime[projectionSymbol]();
+await paletteRuntime.loadPackage({ package: basePackage, assets: [{ path: "song.ogg", bytes: audioBytes }] });
+assert.notEqual(paletteRuntime[projectionSymbol](), stalePaletteEvents);
+assert.equal(paletteRuntime[projectionSymbol]().some((event) => event.appearanceColor === "#FF0000" || event.appearanceColor === "#808080"), false, "successful package replacement resolves a fresh effective palette");
+paletteRuntime.destroy();
+assert.deepEqual(paletteRuntime[projectionSymbol](), [], "destroy clears private render projection state");
+
+const stalePaletteHash = structuredClone(withPalette(basePackage, "#00FF00", "#0000FF"));
+stalePaletteHash.notePalette.left = "#FFFFFF";
+await assert.rejects(() => validateRuntimePackage(stalePaletteHash), hasCode("note_palette_hash_mismatch"));
+const mismatchedPaletteReference = structuredClone(withPalette(basePackage, "#00FF00", "#0000FF"));
+mismatchedPaletteReference.charts.find((chart) => chart.mode === "flow").notePalette.paletteHash = `sha256:${"0".repeat(64)}`;
+await assert.rejects(() => validateRuntimePackage(mismatchedPaletteReference), hasCode("flow_note_palette_mismatch"));
+const mismatchedFlowHash = structuredClone(withPalette(basePackage, "#00FF00", "#0000FF"));
+mismatchedFlowHash.charts.find((chart) => chart.mode === "flow").contentHash = `sha256:${"0".repeat(64)}`;
+await assert.rejects(() => validateRuntimePackage(mismatchedFlowHash), hasCode("flow_content_hash_mismatch"));
+const compatibleV2Beatmap = structuredClone(basePackage);
+compatibleV2Beatmap.source.sourceBeatmapFormat = "v2";
+compatibleV2Beatmap.source.sourceBeatmapVersion = "2.6.0";
+await validateRuntimePackage(compatibleV2Beatmap);
+const compatibleV4NullVersions = structuredClone(basePackage);
+compatibleV4NullVersions.source.sourceInfoFormat = "v4";
+compatibleV4NullVersions.source.sourceInfoVersion = null;
+compatibleV4NullVersions.source.sourceBeatmapFormat = "v4";
+compatibleV4NullVersions.source.sourceBeatmapVersion = null;
+await validateRuntimePackage(compatibleV4NullVersions);
+for (const [infoFormat, beatmapFormat] of [["v2", "v4"], ["v4", "v2"], ["v4", "v3"]]) {
+  const incompatibleFormats = structuredClone(basePackage);
+  incompatibleFormats.source.sourceInfoFormat = infoFormat;
+  incompatibleFormats.source.sourceBeatmapFormat = beatmapFormat;
+  await assert.rejects(() => validateRuntimePackage(incompatibleFormats), hasCode("source_format_provenance_invalid"), `${infoFormat} Info cannot pair with ${beatmapFormat} beatmap format`);
+}
+for (const [field, value] of [["sourceInfoVersion", "2.1"], ["sourceInfoVersion", 2.1], ["sourceBeatmapVersion", "3"], ["sourceBeatmapVersion", false]]) {
+  const invalidVersion = structuredClone(basePackage);
+  invalidVersion.source[field] = value;
+  await assert.rejects(() => validateRuntimePackage(invalidVersion), hasCode("source_format_provenance_invalid"), `${field} must be null or an exact semantic version`);
+}
+const mismatchedPaletteSource = structuredClone(withPalette(basePackage, "#00FF00", "#0000FF"));
+mismatchedPaletteSource.source.sourceInfoHash = `sha256:${"9".repeat(64)}`;
+await assert.rejects(() => validateRuntimePackage(mismatchedPaletteSource), hasCode("note_palette_provenance_mismatch"));
+const mismatchedPaletteDifficulty = structuredClone(withPalette(basePackage, "#00FF00", "#0000FF"));
+mismatchedPaletteDifficulty.source.sourceDifficultyHash = `sha256:${"8".repeat(64)}`;
+await assert.rejects(() => validateRuntimePackage(mismatchedPaletteDifficulty), hasCode("note_palette_provenance_mismatch"));
+const mismatchedPaletteTrace = structuredClone(withPalette(basePackage, "#00FF00", "#0000FF"));
+mismatchedPaletteTrace.conversionTrace.notePalette = null;
+await assert.rejects(() => validateRuntimePackage(mismatchedPaletteTrace), hasCode("note_palette_trace_mismatch"));
+const mismatchedFlowTraceHash = structuredClone(basePackage);
+mismatchedFlowTraceHash.conversionTrace.flow[0].contentHash = `sha256:${"0".repeat(64)}`;
+await assert.rejects(() => validateRuntimePackage(mismatchedFlowTraceHash), hasCode("flow_trace_content_hash_mismatch"));
+const boxingPalette = structuredClone(basePackage); boxingPalette.charts.find((chart) => chart.mode === "boxing").notePalette = null;
+await assert.rejects(() => validateRuntimePackage(boxingPalette), hasCode("boxing_palette_forbidden"));
+const authoredAppearance = structuredClone(basePackage); authoredAppearance.charts.find((chart) => chart.mode === "flow").beats[0].appearanceColor = "#FFFFFF";
+await assert.rejects(() => validateRuntimePackage(authoredAppearance), hasCode("authored_appearance_forbidden"));
+const boxingBeatPalette = structuredClone(basePackage); boxingBeatPalette.charts.find((chart) => chart.mode === "boxing").beats[0].paletteHash = `sha256:${"0".repeat(64)}`;
+await assert.rejects(() => validateRuntimePackage(boxingBeatPalette), hasCode("boxing_palette_forbidden"));
+const songPaletteLeak = structuredClone(basePackage); songPaletteLeak.song.paletteHash = `sha256:${"0".repeat(64)}`;
+await assert.rejects(() => validateRuntimePackage(songPaletteLeak), hasCode("song_palette_forbidden"));
+let paletteAccessorCalls = 0;
+const accessorPalettePackage = withPalette(basePackage, "#00FF00", "#0000FF");
+Object.defineProperty(accessorPalettePackage.notePalette, "left", { enumerable: true, get() { paletteAccessorCalls += 1; return "#00FF00"; } });
+await assert.rejects(() => validateRuntimePackage(accessorPalettePackage), hasCode("data_record_invalid"));
+assert.equal(paletteAccessorCalls, 0, "palette accessors must never execute");
+
 const idlePlaybackSnapshot = runtime.getSnapshot(); const idlePlaybackListenerCalls = listenerCalls;
 runtime.setPlaybackState({ state: "idle", positionMs: 0, judgedEventIds: [], activeEventIds: [] });
 assert.equal(runtime.getSnapshot(), idlePlaybackSnapshot, "equivalent playback truth must retain the exact public snapshot");
@@ -91,6 +226,7 @@ intervalFlowChart.beats = [
   { start: 4, end: 4.5, type: "burst", hand: "right", placement: 7, tailPlacement: 6, direction: 0 },
   { start: 74.5999984741211, end: 74.6624984741211, type: "obstacle", sourceGeometry, gameplayGeometry, gridMask: [1,5,9] }
 ];
+rehashFlow(intervalPackage);
 const intervalRuntime = createAeroContentRuntime();
 await intervalRuntime.loadPackage({ package: intervalPackage, assets: [{ path: "song.ogg", bytes: audioBytes }] });
 const intervalSnapshot = intervalRuntime.getSnapshot();
@@ -123,6 +259,36 @@ intervalRuntime.setPlaybackState({ state: "paused", positionMs: 29850, activeEve
 await intervalRuntime.swapFutureVariant(intervalSnapshot.selectedVariant.variantId);
 assert.equal(intervalRuntime.getSnapshot().resolvedEvents.includes(replacedObstacle), true, "active interval identity and end timestamp survive paused swaps");
 assert.equal(beforeIntervalSwap.some((event) => event.intervalEndTimestampMs !== undefined), true);
+const segmentedPackage = structuredClone(basePackage);
+segmentedPackage.song.timing = { anchorMs: 250, tempoSegments: [{ startBeat: 0, bpm: 120 }, { startBeat: 4, bpm: 60 }, { startBeat: 8, bpm: 240 }], stopSegments: [{ startBeat: 2, durationMs: 125 }, { startBeat: 6, durationMs: 375 }], timeSignatureSegments: [{ startBeat: 0, numerator: 4, denominator: 4 }] };
+const segmentedFlow = segmentedPackage.charts.find((chart) => chart.mode === "flow");
+segmentedFlow.beats = [{ start: 2, type: "note", hand: "left", placement: 4, direction: 1, requiresDirection: true }, { start: 3, end: 9, type: "arc", hand: "left", placement: 4, tailPlacement: 5, direction: 1 }];
+rehashFlow(segmentedPackage);
+const segmentedRuntime = createAeroContentRuntime();
+await segmentedRuntime.loadPackage({ package: segmentedPackage, assets: [{ path: "song.ogg", bytes: audioBytes }] });
+assert.deepEqual(segmentedRuntime.getSnapshot().resolvedEvents.map((event) => [event.centerTimestampMs, event.intervalEndTimestampMs ?? null]), [[1375, null], [1875, 7000]], "resolved center/end use one snapshotted anchor/tempo/stop mapper");
+for (const mutateTiming of [
+  (timing) => { timing.tempoSegments = [{ startBeat: 0, bpm: 120 }, { startBeat: 0, bpm: 90 }]; },
+  (timing) => { timing.stopSegments = [{ startBeat: 3, durationMs: 10 }, { startBeat: 2, durationMs: 20 }]; }
+]) {
+  const malformedTimingPackage = structuredClone(basePackage); mutateTiming(malformedTimingPackage.song.timing);
+  await assert.rejects(() => validateRuntimePackage(malformedTimingPackage), hasCode("song_timing_invalid"));
+}
+const nonFiniteTimingPackage = structuredClone(basePackage); nonFiniteTimingPackage.song.timing.anchorMs = Number.NaN;
+await assert.rejects(() => validateRuntimePackage(nonFiniteTimingPackage), hasCode("number_invalid"));
+const exactStopCapacityPackage = structuredClone(basePackage);
+exactStopCapacityPackage.song.timing.stopSegments = Array.from({ length: 4_096 }, (_, index) => ({ startBeat: index / 2, durationMs: 1 }));
+await validateRuntimePackage(exactStopCapacityPackage);
+const excessiveStopCapacityPackage = structuredClone(exactStopCapacityPackage);
+excessiveStopCapacityPackage.song.timing.stopSegments.push({ startBeat: 2_048, durationMs: 1 });
+await assert.rejects(() => validateRuntimePackage(excessiveStopCapacityPackage), hasCode("song_timing_invalid"), "timing segment capacity must fail closed above the contract limit");
+const exactAnchorBoundaryPackage = structuredClone(basePackage);
+exactAnchorBoundaryPackage.song.timing.anchorMs = 100;
+exactAnchorBoundaryPackage.charts.find((chart) => chart.mode === "flow").beats = [{ start: 172799.8, type: "note", hand: "right", placement: 4, direction: 8, requiresDirection: false }];
+rehashFlow(exactAnchorBoundaryPackage);
+const exactAnchorBoundaryRuntime = createAeroContentRuntime();
+await exactAnchorBoundaryRuntime.loadPackage({ package: exactAnchorBoundaryPackage, assets: [{ path: "song.ogg", bytes: audioBytes }] });
+assert.equal(exactAnchorBoundaryRuntime.getSnapshot().resolvedEvents[0].centerTimestampMs, maximumAuthoredTimelineMs, "inclusive 24-hour anchor boundary is accepted");
 const accessibilityRuntime = createAeroContentRuntime();
 await accessibilityRuntime.loadPackage({ package: intervalPackage, assets: [{ path: "song.ogg", bytes: audioBytes }] });
 const accessibilityFlowId = accessibilityRuntime.getSnapshot().selectedVariant.variantId;
@@ -146,11 +312,17 @@ tooManyObstacles.charts.find((chart) => chart.mode === "flow").beats = Array.fro
 await assert.rejects(() => validateRuntimePackage(tooManyObstacles), hasCode("flow_obstacle_limit_exceeded"));
 const exactObstacleLimit = structuredClone(tooManyObstacles);
 exactObstacleLimit.charts.find((chart) => chart.mode === "flow").beats.pop();
+rehashFlow(exactObstacleLimit);
 await validateRuntimePackage(exactObstacleLimit);
 const legacyPackage = structuredClone(basePackage); legacyPackage.schemaId = "aerobeat.song-package.v1"; legacyPackage.schemaVersion = 1; legacyPackage.packageVersion = "1.0.0";
 await assert.rejects(() => validateRuntimePackage(legacyPackage), hasCode("flow_obstacle_reimport_required"));
+const versionTwoPackage = structuredClone(basePackage); versionTwoPackage.schemaId = "aerobeat.song-package.v2"; versionTwoPackage.schemaVersion = 2; versionTwoPackage.packageVersion = "2.0.0";
+await assert.rejects(() => validateRuntimePackage(versionTwoPackage), hasCode("flow_obstacle_reimport_required"));
+const versionThreePackage = structuredClone(basePackage); versionThreePackage.schemaId = "aerobeat.song-package.v3"; versionThreePackage.schemaVersion = 3; versionThreePackage.packageVersion = "3.0.0";
+await assert.rejects(() => validateRuntimePackage(versionThreePackage), hasCode("note_palette_reimport_required"));
 const shadowedResolvedField = structuredClone(basePackage);
 shadowedResolvedField.charts.find((chart) => chart.mode === "flow").beats[0].centerTimestampMs = 500;
+rehashFlow(shadowedResolvedField);
 const shadowRuntime = createAeroContentRuntime();
 await assert.rejects(() => shadowRuntime.loadPackage({ package: shadowedResolvedField, assets: [{ path: "song.ogg", bytes: audioBytes }] }), hasCode("resolved_event_shadow_invalid"));
 assert.equal(shadowRuntime.getSnapshot().state, "error");
@@ -169,6 +341,7 @@ boundaryPackage.song.durationSec = 86_400;
 const boundaryFlow = boundaryPackage.charts.find((chart) => chart.mode === "flow");
 assert.ok(boundaryFlow);
 boundaryFlow.beats = [{ start: 172_800, type: "note", hand: "left", placement: 4, direction: 1 }, { start: 172_799, end: 172_800, type: "obstacle", sourceGeometry, gameplayGeometry, gridMask: [1,5,9] }];
+rehashFlow(boundaryPackage);
 await validateRuntimePackage(boundaryPackage);
 const timelineBoundaryRuntime = createAeroContentRuntime();
 await timelineBoundaryRuntime.loadPackage({ package: boundaryPackage, assets: [{ path: "song.ogg", bytes: audioBytes }] });
@@ -199,6 +372,7 @@ assert.equal(snapshot.resolvedEvents.some((event) => event.authoredBeat.type ===
 const crossed = snapshot.resolvedEvents.find((event) => event.authoredBeat.type === "guard");
 assert.equal(crossed.authoredBeat.guardTarget.crossed, true);
 assert.deepEqual(crossed.authoredBeat.sourceEventIds, ["source-guard"]);
+assert.equal(runtime[projectionSymbol]().every((event) => !Object.hasOwn(event, "appearanceColor")), true, "Boxing guards, punches, squat, and weave projections never receive Flow appearance colors");
 const emittedPackage = structuredClone(basePackage);
 emittedPackage.charts[0].prototype.modifiers = ["crossed_guard"];
 const emittedRuntime = createAeroContentRuntime();
@@ -264,6 +438,13 @@ const externalRuntime = createAeroContentRuntime({ fetch: async (url) => {
 } });
 await externalRuntime.loadExternalPackage(externalUrl);
 assert.equal(externalRuntime.getSnapshot().source.id, externalUrl);
+const paletteExternalHash = hashJson(palettePackage);
+const paletteExternalUrl = "https://community.example/maps/palette-package.json";
+const paletteExternalRuntime = createAeroContentRuntime({ fetch: async (url) => String(url) === paletteExternalUrl
+  ? new Response(JSON.stringify({ package: palettePackage, packageHash: `sha256:${paletteExternalHash}`, assets: [{ path: "song.ogg", url: externalAudioUrl, hash: `sha256:${audioHash}` }] }), { status: 200 })
+  : new Response(audioBytes, { status: 200 }) });
+await paletteExternalRuntime.loadExternalPackage(paletteExternalUrl);
+assert.deepEqual(paletteExternalRuntime[projectionSymbol]().filter((event) => Object.hasOwn(event, "appearanceColor")).map((event) => event.appearanceColor), ["#FF0000", "#808080"], "external URL loading resolves the same private palette projection");
 const corsRuntime = createAeroContentRuntime({ fetch: async (url) => {
   if (String(url).endsWith("package.json")) return new Response(JSON.stringify({ package: basePackage, assets: [{ path: "song.ogg", url: externalAudioUrl, hash: audioHash }] }), { status: 200 });
   throw new TypeError("CORS denied");
@@ -284,6 +465,14 @@ const handle = Object.freeze({ schema: "aerobeat/persistence_handle", version: 1
 const persistenceRuntime = createAeroContentRuntime({ persistenceResolver: { async exportPackage() { if (!persistenceExists) throw Object.assign(new Error("deleted"), { code: "package_not_found" }); return { bytes: exportBytes }; } } });
 await persistenceRuntime.loadPersistenceHandle(handle);
 assert.equal(persistenceRuntime.getSnapshot().source.kind, "persistence_handle");
+const paletteExportBytes = makeAeroPackage(palettePackage, paletteExternalHash, [{ path: "song.ogg", bytes: audioBytes, hash: audioHash }]);
+const paletteHandle = Object.freeze({ ...handle, key: "palette-package", packageId: palettePackage.packageId, packageHash: { schema: "aerobeat/content_hash", version: 1, algorithm: "sha256", value: paletteExternalHash } });
+const palettePersistenceRuntime = createAeroContentRuntime({ persistenceResolver: { async exportPackage() { return paletteExportBytes; } } });
+await palettePersistenceRuntime.loadPersistenceHandle(paletteHandle);
+assert.deepEqual(palettePersistenceRuntime[projectionSymbol]().filter((event) => Object.hasOwn(event, "appearanceColor")).map((event) => event.appearanceColor), ["#FF0000", "#808080"], "AEROPKG persistence loading resolves the same private palette projection");
+const paletteFallbackRuntime = createAeroContentRuntime({ persistenceResolver: { async loadPackage() { return { package: palettePackage, assetPaths: ["song.ogg"] }; }, async readAsset() { return audioBytes; } } });
+await paletteFallbackRuntime.loadPersistenceHandle(paletteHandle, { assetHashes: { "song.ogg": audioHash } });
+assert.deepEqual(paletteFallbackRuntime[projectionSymbol]().filter((event) => Object.hasOwn(event, "appearanceColor")).map((event) => event.appearanceColor), ["#FF0000", "#808080"], "fallback persistence loading resolves the same private palette projection");
 const largePackageHash = hashJson(largeCanonicalPackage);
 const largeExportBytes = makeAeroPackage(largeCanonicalPackage, largePackageHash, [{ path: "song.ogg", bytes: audioBytes, hash: audioHash }]);
 const largeHandle = Object.freeze({ ...handle, key: "large-canonical", packageId: largeCanonicalPackage.packageId, packageHash: { schema: "aerobeat/content_hash", version: 1, algorithm: "sha256", value: largePackageHash } });
@@ -321,7 +510,7 @@ assert.equal(isolatedB.getSnapshot().state, "ready");
 let releaseFirst;
 const delayed = new Promise((resolve) => { releaseFirst = resolve; });
 const replacing = createAeroContentRuntime({ fetch: async (url) => {
-  if (String(url).includes("first")) { await delayed; return new Response(JSON.stringify({ package: basePackage, assets: [{ path: "song.ogg", url: "https://example.invalid/song.ogg", hash: audioHash }] }), { status: 200 }); }
+  if (String(url).includes("first")) { await delayed; return new Response(JSON.stringify({ package: palettePackage, assets: [{ path: "song.ogg", url: "https://example.invalid/song.ogg", hash: audioHash }] }), { status: 200 }); }
   if (String(url).endsWith("song.ogg")) return new Response(audioBytes, { status: 200 });
   return new Response(JSON.stringify({ package: basePackage, assets: [{ path: "song.ogg", url: "https://example.invalid/song.ogg", hash: audioHash }] }), { status: 200 });
 } });
@@ -331,6 +520,22 @@ releaseFirst();
 await assert.rejects(() => first, hasCode("operation_aborted"));
 await second;
 assert.equal(replacing.getSnapshot().source.id, "https://example.invalid/second.json");
+assert.equal(replacing[projectionSymbol]().some((event) => event.appearanceColor === "#FF0000" || event.appearanceColor === "#808080"), false, "a stale palette-bearing load cannot overwrite the current generation");
+const selectionRace = createAeroContentRuntime();
+await selectionRace.loadPackage({ package: palettePackage, assets: [{ path: "song.ogg", bytes: audioBytes }] });
+const staleSelection = selectionRace.selectVariant(selectionRace.getSnapshot().selectedVariant.variantId, { modifierIds: ["no_obstacles"] });
+const staleSelectionRejected = assert.rejects(() => staleSelection, hasCode("operation_aborted"));
+await selectionRace.loadPackage({ package: basePackage, assets: [{ path: "song.ogg", bytes: audioBytes }] });
+await staleSelectionRejected;
+assert.equal(selectionRace[projectionSymbol]().some((event) => event.appearanceColor === "#FF0000" || event.appearanceColor === "#808080"), false, "stale async variant composition cannot republish a prior generation palette");
+const swapRace = createAeroContentRuntime();
+await swapRace.loadPackage({ package: palettePackage, assets: [{ path: "song.ogg", bytes: audioBytes }] });
+swapRace.setPlaybackState({ state: "paused", positionMs: 0 });
+const staleSwap = swapRace.swapFutureVariant(swapRace.getSnapshot().selectedVariant.variantId, { modifierIds: ["no_obstacles"] });
+const staleSwapRejected = assert.rejects(() => staleSwap, hasCode("operation_aborted"));
+await swapRace.loadPackage({ package: basePackage, assets: [{ path: "song.ogg", bytes: audioBytes }] });
+await staleSwapRejected;
+assert.equal(swapRace[projectionSymbol]().some((event) => event.appearanceColor === "#FF0000" || event.appearanceColor === "#808080"), false, "stale future swaps cannot republish a prior generation palette");
 
 // Adversarial public-boundary narrowing must not execute getters or coercion hooks.
 let executed = false;
@@ -406,13 +611,35 @@ function hashJson(value) { return hashBytes(new TextEncoder().encode(canonical(v
 function canonical(value) { return JSON.stringify(sort(value)); }
 /** @param {unknown} value @returns {unknown} */
 function sort(value) { if (Array.isArray(value)) return value.map(sort); if (value && typeof value === "object") { const result = {}; for (const key of Object.keys(value).sort()) result[key] = sort(value[key]); return result; } return value; }
+/** @param {Record<string, unknown>} packageRecord @param {string} left @param {string} right */
+function withPalette(packageRecord, left, right) {
+  const result = structuredClone(packageRecord);
+  const base = { schema: "aerobeat/authored_note_palette", version: 1, left, right, colorSpace: "srgb", alpha: 1, provenance: { kind: "difficulty_custom_data", infoFormat: "v2", infoHash: `sha256:${"1".repeat(64)}`, difficultyHash: `sha256:${"2".repeat(64)}`, fieldSet: "v2_custom", schemeIndex: null } };
+  result.notePalette = { ...base, paletteHash: `sha256:${hashJson(base)}` };
+  result.charts.find((chart) => chart.mode === "flow").notePalette = { source: "package", paletteHash: result.notePalette.paletteHash };
+  rehashFlow(result);
+  return result;
+}
+/** @param {Record<string, unknown>} packageRecord */
+function rehashFlow(packageRecord) {
+  const flow = packageRecord.charts.find((chart) => chart.mode === "flow");
+  flow.contentHash = `sha256:${hashJson({ beats: flow.beats, rulesetId: flow.rulesetId, notePalette: flow.notePalette })}`;
+  if (packageRecord.conversionTrace) {
+    packageRecord.conversionTrace.notePalette = flow.notePalette;
+    if (Array.isArray(packageRecord.conversionTrace.flow) && packageRecord.conversionTrace.flow[0]) {
+      packageRecord.conversionTrace.flow[0].notePalette = flow.notePalette;
+      packageRecord.conversionTrace.flow[0].contentHash = flow.contentHash;
+    }
+  }
+}
 /** @param {Record<string, unknown>} packageRecord @param {number} eventCount */
 function packageWithFlowEvents(packageRecord, eventCount) {
   const result = structuredClone(packageRecord);
   const charts = /** @type {Record<string, unknown>[]} */ (result.charts);
   const flow = charts.find((chart) => chart.mode === "flow");
   if (!flow) throw new Error("flow fixture missing");
-  flow.beats = Array.from({ length: eventCount }, (_, index) => ({ start: index / 4, type: "note", hand: index % 2 === 0 ? "left" : "right", placement: index % 12, direction: index % 9 }));
+  flow.beats = Array.from({ length: eventCount }, (_, index) => ({ start: index / 4, type: "note", hand: index % 2 === 0 ? "left" : "right", placement: index % 12, direction: index % 9, requiresDirection: index % 9 !== 8 }));
+  rehashFlow(result);
   return result;
 }
 /** @param {string} declaredAudioHash @param {Readonly<Record<string, unknown>> | null} [converterProfile] */
@@ -427,19 +654,22 @@ async function makePackage(declaredAudioHash, converterProfile = null) {
       { start: 1, end: 2, type: "squat", eventId: `${token}-squat`, sourceEventIds: ["source-squat"], sourceGeometry: { schema:"aerobeat/obstacle_source_geometry",version:1,coordinateSpace:"beatsaber_v3_obstacle_rect",kind:"v3_rect",x:0,y:2,width:4,height:1 }, gameplayGeometry: { schema:"aerobeat/obstacle_gameplay_geometry",version:1,coordinateSpace:"aerobeat_top_left_grid",x:0,y:0,width:4,height:1 }, gridMask: [0, 1, 2, 3], blockedCells: [0, 1, 2, 3], checkpoint: { kind: "instantaneous", freshnessMs: 150, timingWindowMs: 180, noseSafeCells: [4, 5, 6, 7, 8, 9, 10, 11] } },
       { start: 2, type: "guard", eventId: `${token}-guard`, sourceEventIds: ["source-guard"], guardTarget: { leftCell: 4, rightCell: 7 }, checkpoint: { kind: "instantaneous" } },
       { start: 3, type: "straight_left", eventId: `${token}-punch-a`, sourceEventIds: ["source-punch-a"], spatialTarget: { targetCell: 5, acceptedSubcells: [20, 21], sourceCell: 9, qualificationMs: 100 } },
-      { start: 4, type: "hook_right", eventId: `${token}-punch-b`, sourceEventIds: ["source-punch-b"], spatialTarget: { targetCell: 6, acceptedSubcells: [26, 27], sourceCell: 5, entryDirection: "left" } }
+      { start: 4, type: "hook_right", eventId: `${token}-punch-b`, sourceEventIds: ["source-punch-b"], spatialTarget: { targetCell: 6, acceptedSubcells: [26, 27], sourceCell: 5, entryDirection: "left" } },
+      { start: 5, end: 6, type: "weave_right", eventId: `${token}-weave`, sourceEventIds: ["source-weave"], sourceGeometry: { schema:"aerobeat/obstacle_source_geometry",version:1,coordinateSpace:"beatsaber_v3_obstacle_rect",kind:"v3_rect",x:0,y:0,width:1,height:3 }, gameplayGeometry: { schema:"aerobeat/obstacle_gameplay_geometry",version:1,coordinateSpace:"aerobeat_top_left_grid",x:0,y:0,width:1,height:3 }, gridMask: [0,4,8], blockedCells: [0,4,8], checkpoint: { kind: "instantaneous", freshnessMs: 150, timingWindowMs: 180, noseSafeCells: [1,2,3,5,6,7,9,10,11] } }
     ];
     const contentHash = hashJson({ beats, recipeId, rulesetId, sourceHash, ...(converterProfile ? { converterProfile } : {}) });
     charts.push({ schemaId: "aerobeat.chart.boxing.v1", schemaVersion: 1, recordVersion: 1, chartId: `chart-${token}`, chartName: token, mode: "boxing", difficulty: "Expert", prototype: { contractId: "aerobeat.boxing.prototype.v1", recipeId, recipeVersion: "1.0.0", rulesetId, rulesetVersion: "1.0.0", sourceHash, recipeHash: `sha256:${"1".repeat(64)}`, rulesetHash: `sha256:${"2".repeat(64)}`, contentHash: `sha256:${contentHash}`, modifiers: [], ...(converterProfile ? { converterProfile: structuredClone(converterProfile) } : {}), regenerationRequiredFor: [] }, beats });
   }
-  charts.push({ schemaId: "aerobeat.chart.flow.v3", schemaVersion: 3, recordVersion: 2, rulesetId: "flow_grid_v2", chartId: "chart-flow", chartName: "Flow", mode: "flow", difficulty: "Expert", beats: [{ start: 1, type: "note", hand: "left", placement: 4, direction: 1 }] });
+  const flowBeats = [{ start: 1, type: "note", hand: "left", placement: 4, direction: 1, requiresDirection: true }];
+  const flowChart = { schemaId: "aerobeat.chart.flow.v4", schemaVersion: 4, recordVersion: 2, rulesetId: "flow_grid_v2", chartId: "chart-flow", chartName: "Flow", mode: "flow", difficulty: "Expert", notePalette: null, contentHash: `sha256:${hashJson({ beats: flowBeats, rulesetId: "flow_grid_v2", notePalette: null })}`, beats: flowBeats };
+  charts.push(flowChart);
   return {
-    schemaId: "aerobeat.song-package.v3", schemaVersion: 3, packageVersion: "3.0.0", packageId: "package-arbitrary-compatible", songId: "song-arbitrary", songName: "Arbitrary Compatible Map",
-    source: { provider: "community", sourceId: "not-an-allowlist-id", sourceVersionHash: "source-version", difficulty: "Expert", sourceDifficultyPath: "Expert.dat", sourceHash, obstacleContract: "normalized_obstacle_v2", ...(converterProfile ? { converterProfile: structuredClone(converterProfile) } : {}) },
+    schemaId: "aerobeat.song-package.v4", schemaVersion: 4, packageVersion: "4.0.0", packageId: "package-arbitrary-compatible", songId: "song-arbitrary", songName: "Arbitrary Compatible Map", notePalette: null,
+    source: { provider: "community", sourceId: "not-an-allowlist-id", sourceVersionHash: "source-version", difficulty: "Expert", sourceInfoFormat: "v2", sourceInfoVersion: "2.1.0", sourceInfoHash: `sha256:${"1".repeat(64)}`, sourceDifficultyPath: "Expert.dat", sourceBeatmapFormat: "v3", sourceBeatmapVersion: "3.3.0", sourceDifficultyHash: `sha256:${"2".repeat(64)}`, sourceHash, obstacleContract: "normalized_obstacle_v2", ...(converterProfile ? { converterProfile: structuredClone(converterProfile) } : {}) },
     song: { schemaId: "aerobeat.song.v1", schemaVersion: 1, recordVersion: 1, songId: "song-arbitrary", songName: "Arbitrary Compatible Map", durationSec: 10, audio: { filePath: "song.ogg", contentHash: `sha256:${declaredAudioHash}` }, timing: { anchorMs: 0, tempoSegments: [{ startBeat: 0, bpm: 120 }], stopSegments: [], timeSignatureSegments: [{ startBeat: 0, numerator: 4, denominator: 4 }] } },
     charts,
     sets: charts.map((chart, index) => ({ schemaId: "aerobeat.set.v1", schemaVersion: 1, recordVersion: 1, setId: `set-${index}`, setName: chart.chartName, songId: "song-arbitrary", chartId: chart.chartId })),
-    recipeDefinitions: [], rulesetDefinitions: [], conversionTrace: converterProfile ? { converterProfile: structuredClone(converterProfile), boxing: charts.filter((chart) => chart.mode === "boxing").map((chart) => ({ chartId: chart.chartId, converterProfile: structuredClone(converterProfile) })), flow: [{}] } : {}, presentationSuggestion: null
+    recipeDefinitions: [], rulesetDefinitions: [], conversionTrace: { notePalette: null, boxing: charts.filter((chart) => chart.mode === "boxing").map((chart) => ({ chartId: chart.chartId, ...(converterProfile ? { converterProfile: structuredClone(converterProfile) } : {}) })), flow: [{ obstacleContract: "normalized_obstacle_v2", sourceHash, sourceInfoFormat: "v2", sourceInfoVersion: "2.1.0", sourceInfoHash: `sha256:${"1".repeat(64)}`, sourceDifficultyPath: "Expert.dat", sourceBeatmapFormat: "v3", sourceBeatmapVersion: "3.3.0", sourceDifficultyHash: `sha256:${"2".repeat(64)}`, notePalette: null, contentHash: flowChart.contentHash }], ...(converterProfile ? { converterProfile: structuredClone(converterProfile) } : {}) }, presentationSuggestion: null
   };
 }
 /** @param {Uint8Array} bytes @param {(metadata: Record<string, unknown>) => Record<string, unknown>} transform */

@@ -16,6 +16,8 @@ import { cloneFrozenData, compareCodePoints, dataError, dataProperty, diagnostic
 /** @typedef {import("./package-content.js").RuntimeVariant} RuntimeVariant */
 /** @typedef {import("./assets.js").LoadedAsset} LoadedAsset */
 
+const internalRenderProjectionSymbol = Symbol.for("aerobeat.web-content.internal-render-projection");
+
 /** @type {Readonly<Record<string, unknown>>} */
 export const aeroContentRuntimeCapabilities = Object.freeze({
   directPackages: true,
@@ -51,6 +53,8 @@ export function createAeroContentRuntime(options = {}) {
   let selectedVariant = null;
   /** @type {readonly DataRecord[]} */
   let resolvedEvents = Object.freeze([]);
+  /** @type {readonly DataRecord[]} */
+  let renderEvents = Object.freeze([]);
   let playbackState = "idle";
   let playbackPositionMs = 0;
   let judgedEventIds = new Set();
@@ -61,7 +65,10 @@ export function createAeroContentRuntime(options = {}) {
   let reloadOptions = {};
   /** @type {DataRecord | null} */
   let loadedPackage = null;
-  let loadedBpm = 120;
+  /** @type {((beat:number)=>number) | null} */
+  let loadedBeatToTimelineMs = null;
+  /** @type {import("@aerobeat/web-contracts").AeroEffectiveNotePalette | null} */
+  let effectiveNotePalette = null;
   let packageId = null;
   let packageHash = null;
   let sourceSnapshot = null;
@@ -70,7 +77,7 @@ export function createAeroContentRuntime(options = {}) {
   let backgroundSnapshot = fallbackBackground();
   let snapshot = makeSnapshot("idle", null);
 
-  const service = Object.freeze({
+  const serviceValue = {
     /**
      * Load a direct package wrapper. Raw bytes remain private to this service.
      *
@@ -146,9 +153,11 @@ export function createAeroContentRuntime(options = {}) {
     async selectVariant(variantId, selection = {}) {
       assertReady();
       if (playbackState === "running") throw dataError("variant_swap_running", "Variants may not change while gameplay is running");
-      const target = await resolveVariant(requireBoundedString(variantId, "variant_identity_invalid", 256), normalizeModifierSelection(selection));
+      const localGeneration = generation;
+      const target = await resolveVariant(requireBoundedString(variantId, "variant_identity_invalid", 256), normalizeModifierSelection(selection), localGeneration);
+      checkGeneration(localGeneration);
       selectedVariant = target;
-      resolvedEvents = timelineFor(target, loadedBpm);
+      setResolvedEvents(timelineFor(target, requireTimingMapper()), target);
       publish();
       return target;
     },
@@ -162,14 +171,17 @@ export function createAeroContentRuntime(options = {}) {
     async swapFutureVariant(variantId, selection = {}) {
       assertReady();
       if (playbackState !== "paused") throw dataError("variant_swap_not_paused", "Future-target swaps require a paused session");
-      const target = await resolveVariant(requireBoundedString(variantId, "variant_identity_invalid", 256), normalizeModifierSelection(selection));
-      const future = timelineFor(target, loadedBpm);
+      const localGeneration = generation;
+      const target = await resolveVariant(requireBoundedString(variantId, "variant_identity_invalid", 256), normalizeModifierSelection(selection), localGeneration);
+      checkGeneration(localGeneration);
+      const future = timelineFor(target, requireTimingMapper());
       const preserved = resolvedEvents.filter((event) => Number(event.centerTimestampMs) < playbackPositionMs || judgedEventIds.has(String(event.eventId)) || activeEventIds.has(String(event.eventId)));
       const preservedIds = new Set(preserved.map((event) => String(event.eventId)));
       const preservedTargets = new Set(preserved.flatMap(eventTargetKeys));
       const replacement = future.filter((event) => Number(event.centerTimestampMs) >= playbackPositionMs && !preservedIds.has(String(event.eventId)) && eventTargetKeys(event).every((key) => !preservedTargets.has(key)));
       resolvedEvents = Object.freeze([...preserved, ...replacement].sort((left, right) => Number(left.centerTimestampMs) - Number(right.centerTimestampMs) || compareCodePoints(String(left.eventId), String(right.eventId))));
       selectedVariant = target;
+      renderEvents = projectRenderEvents(resolvedEvents, (event) => eventBelongsToFlow(event, target), requireEffectivePalette());
       publish();
       return target;
     },
@@ -203,7 +215,14 @@ export function createAeroContentRuntime(options = {}) {
       destroyed = true; generation += 1; activeAbort.abort(); clearLoaded(); sourceSnapshot = null; reloadLoader = null; reloadOptions = {}; listeners.clear();
       snapshot = makeSnapshot("destroyed", Object.freeze({ code: "service_destroyed", message: "Content runtime is destroyed" }));
     }
+  };
+  Object.defineProperty(serviceValue, internalRenderProjectionSymbol, {
+    configurable: false,
+    enumerable: false,
+    writable: false,
+    value: Object.freeze(() => renderEvents)
   });
+  const service = Object.freeze(serviceValue);
   return service;
 
   /** @param {() => Promise<unknown>} loader @param {DataRecord} publicSource @param {RuntimeLoadOptions} loadOptions */
@@ -226,10 +245,10 @@ export function createAeroContentRuntime(options = {}) {
       const loadedAssets = await loadPackageAssets(declarations, { fetch: runtimeOptions.fetch, baseUrl: typeof raw.baseUrl === "string" ? raw.baseUrl : loadOptions.baseUrl, signal: localAbort.signal, timeoutMs: runtimeOptions.timeoutMs, maximumAssetBytes: runtimeOptions.maximumAssetBytes });
       checkCurrent(localGeneration, localAbort.signal);
       verifyPackageAudio(packageResult.song, loadedAssets);
-      loadedPackage = packageResult.package; loadedBpm = packageResult.bpm; packageId = packageResult.packageId; packageHash = packageResult.packageHash; contentLineage = packageResult.source; assets = loadedAssets;
+      loadedPackage = packageResult.package; loadedBeatToTimelineMs = packageResult.beatToTimelineMs; effectiveNotePalette = packageResult.effectiveNotePalette; packageId = packageResult.packageId; packageHash = packageResult.packageHash; contentLineage = packageResult.source; assets = loadedAssets;
       variantById = new Map(packageResult.variants.map((variant) => [variant.variantId, variant])); composedVariants.clear();
       selectedVariant = packageResult.variants.find((variant) => variant.mode === "flow") ?? packageResult.variants[0] ?? null;
-      resolvedEvents = selectedVariant ? timelineFor(selectedVariant, loadedBpm) : Object.freeze([]);
+      setResolvedEvents(selectedVariant ? timelineFor(selectedVariant, requireTimingMapper()) : Object.freeze([]), selectedVariant);
       playbackState = "idle"; playbackPositionMs = 0; judgedEventIds.clear(); activeEventIds.clear();
       themeSnapshot = resolveTheme(songSuggestion, loadOptions);
       backgroundSnapshot = resolveBackground(songSuggestion, loadOptions, loadedAssets);
@@ -243,21 +262,40 @@ export function createAeroContentRuntime(options = {}) {
     } finally { loadOptions.signal?.removeEventListener("abort", externalAbort); }
   }
 
-  /** @param {string} variantId @param {readonly string[]} modifiers */
-  async function resolveVariant(variantId, modifiers) {
+  /** @param {string} variantId @param {readonly string[]} modifiers @param {number} expectedGeneration */
+  async function resolveVariant(variantId, modifiers, expectedGeneration) {
+    checkGeneration(expectedGeneration);
     const base = variantById.get(variantId);
     if (!base) throw dataError("variant_not_found", "Content variant was not found");
     const key = `${variantId}|${[...modifiers].sort().join(",")}`;
     const cached = composedVariants.get(key); if (cached) return cached;
-    const composed = await composeRuntimeVariant(base, modifiers, String(packageId)); composedVariants.set(key, composed); return composed;
+    const composed = await composeRuntimeVariant(base, modifiers, String(packageId));
+    checkGeneration(expectedGeneration);
+    composedVariants.set(key, composed);
+    return composed;
   }
-  function clearLoaded() { assets = []; variantById.clear(); composedVariants.clear(); selectedVariant = null; resolvedEvents = Object.freeze([]); loadedPackage = null; packageId = null; packageHash = null; contentLineage = null; themeSnapshot = null; backgroundSnapshot = fallbackBackground(); playbackState = "idle"; playbackPositionMs = 0; judgedEventIds.clear(); activeEventIds.clear(); }
+  function clearLoaded() { assets = []; variantById.clear(); composedVariants.clear(); selectedVariant = null; resolvedEvents = Object.freeze([]); renderEvents = Object.freeze([]); loadedPackage = null; loadedBeatToTimelineMs = null; effectiveNotePalette = null; packageId = null; packageHash = null; contentLineage = null; themeSnapshot = null; backgroundSnapshot = fallbackBackground(); playbackState = "idle"; playbackPositionMs = 0; judgedEventIds.clear(); activeEventIds.clear(); }
+  /** @param {readonly DataRecord[]} events @param {RuntimeVariant | null} variant */
+  function setResolvedEvents(events, variant) { resolvedEvents = events; renderEvents = variant ? projectRenderEvents(events, (event) => eventBelongsToFlow(event, variant), requireEffectivePalette()) : Object.freeze([]); }
+  /** @param {DataRecord} event @param {RuntimeVariant} current */
+  function eventBelongsToFlow(event, current) {
+    const variantId = String(event.variantId);
+    if (current.variantId === variantId) return current.mode === "flow";
+    const authored = variantById.get(variantId);
+    if (authored) return authored.mode === "flow";
+    for (const composed of composedVariants.values()) if (composed.variantId === variantId) return composed.mode === "flow";
+    return false;
+  }
+  function requireTimingMapper() { if (!loadedBeatToTimelineMs) throw dataError("song_timing_invalid", "Validated song timing is unavailable"); return loadedBeatToTimelineMs; }
+  function requireEffectivePalette() { if (!effectiveNotePalette) throw dataError("effective_note_palette_invalid", "Validated effective note palette is unavailable"); return effectiveNotePalette; }
   function publish() { snapshot = makeSnapshot("ready", null); notifyAll(); }
   function notifyAll() { for (const listener of [...listeners]) notify(listener); }
   /** @param {(value: typeof snapshot) => void} listener */
   function notify(listener) { try { listener(snapshot); } catch (error) { try { runtimeOptions.onListenerError?.(error); } catch { /* listener diagnostics cannot break content */ } } }
   function assertOpen() { if (destroyed) throw dataError("service_destroyed", "Content runtime is destroyed"); }
   function assertReady() { assertOpen(); if (!loadedPackage || snapshot.state !== "ready") throw dataError("content_not_ready", "Content is not ready"); }
+  /** @param {number} currentGeneration */
+  function checkGeneration(currentGeneration) { if (destroyed || currentGeneration !== generation || !loadedPackage) throw dataError("operation_aborted", "Content generation changed during variant resolution"); }
   /** @param {number} currentGeneration @param {AbortSignal} signal */
   function checkCurrent(currentGeneration, signal) { if (destroyed || currentGeneration !== generation || signal.aborted) throw dataError("operation_aborted", "Content load was cancelled"); }
   /** @param {"idle" | "loading" | "ready" | "error" | "destroyed"} state @param {Readonly<{code: string, message: string}> | null} error */
@@ -374,21 +412,29 @@ async function raceAbort(promise, signal) { if (signal.aborted) throw dataError(
 
 /** @param {RuntimeVariant} variant */
 function publicVariant(variant) { return Object.freeze({ variantId: variant.variantId, chartId: variant.chartId, mode: variant.mode, rulesetId: variant.rulesetId, recipeId: variant.recipeId, modifierIds: variant.modifierIds, ranked: variant.ranked, localOnly: variant.localOnly, mapHash: variant.mapHash, scoreIdentityHash: variant.scoreIdentityHash, provenance: variant.provenance }); }
-/** @param {RuntimeVariant} variant @param {number} bpm @returns {readonly DataRecord[]} */
-function timelineFor(variant, bpm) {
+/** @param {RuntimeVariant} variant @param {(beat:number)=>number} beatToTimelineMs @returns {readonly DataRecord[]} */
+function timelineFor(variant, beatToTimelineMs) {
   const beats = Array.isArray(variant.chart.beats) ? variant.chart.beats : [];
   return Object.freeze(beats.map((beatValue, index) => {
     const beat = /** @type {DataRecord} */ (beatValue);
     for (const forbidden of ["centerTimestampMs", "intervalStartTimestampMs", "intervalEndTimestampMs", "endTimestampMs"]) if (Object.hasOwn(beat, forbidden)) throw dataError("resolved_event_shadow_invalid", `Authored beat cannot own resolved field ${forbidden}`);
     const eventId = typeof beat.eventId === "string" ? beat.eventId : `${variant.chartId}:event:${index}`;
-    const centerTimestampMs = Number(beat.start) * 60_000 / bpm;
-    const intervalEndTimestampMs = Object.hasOwn(beat, "end") ? Number(beat.end) * 60_000 / bpm : undefined;
+    const centerTimestampMs = beatToTimelineMs(Number(beat.start));
+    const intervalEndTimestampMs = Object.hasOwn(beat, "end") ? beatToTimelineMs(Number(beat.end)) : undefined;
     return Object.freeze({
       schema: "aerobeat/resolved_content_event", version: 3, eventId, variantId: variant.variantId, chartId: variant.chartId, centerTimestampMs,
       ...(intervalEndTimestampMs === undefined ? {} : { intervalStartTimestampMs: centerTimestampMs, intervalEndTimestampMs }),
       authoredBeat: beat
     });
   }).sort((left, right) => left.centerTimestampMs - right.centerTimestampMs || compareCodePoints(left.eventId, right.eventId)));
+}
+/** @param {readonly DataRecord[]} events @param {(event:DataRecord)=>boolean} isFlowEvent @param {import("@aerobeat/web-contracts").AeroEffectiveNotePalette} palette */
+function projectRenderEvents(events, isFlowEvent, palette) {
+  return Object.freeze(events.map((event) => {
+    const beat = isPlainDataRecord(event.authoredBeat) ? event.authoredBeat : null;
+    if (!isFlowEvent(event) || !beat || beat.type !== "note" || (beat.hand !== "left" && beat.hand !== "right") || (beat.requiresDirection !== true && beat.requiresDirection !== false)) return event;
+    return Object.freeze({ ...event, appearanceColor: beat.hand === "left" ? palette.left : palette.right });
+  }));
 }
 /** @param {DataRecord} event @returns {string[]} */
 function eventTargetKeys(event) { const beat = isPlainDataRecord(event.authoredBeat) ? event.authoredBeat : null; const lineage = beat && Array.isArray(beat.sourceEventIds) ? beat.sourceEventIds.filter((entry) => typeof entry === "string").map((entry) => `source:${entry}`) : []; return lineage.length > 0 ? lineage : [`target:${String(event.centerTimestampMs)}:${String(beat?.type ?? "")}`]; }

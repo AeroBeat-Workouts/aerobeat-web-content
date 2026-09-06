@@ -3,15 +3,18 @@
 import { isObstacleGameplayGeometry, isObstacleGridMask, isObstacleSourceGeometry, maximumObstaclesPerChart } from "@aerobeat/web-contracts/obstacle-contracts";
 import {
   conversionRecipeIds,
+  createAuthoredBeatToTimelineMs,
+  defaultNotePalette,
+  isAuthoredNotePalette,
+  isEffectiveNotePalette,
   mapModifierIds,
   rulesetIds
 } from "@aerobeat/web-contracts";
 import { canonicalJson, cloneFrozenData, dataError, hasExactDataKeys, isPlainDataRecord, runtimePackageDataLimits, sha256Hex } from "./runtime-data.js";
 
 /** @typedef {Readonly<Record<string, unknown>>} DataRecord */
+/** @typedef {import("@aerobeat/web-contracts").AeroEffectiveNotePalette} AeroEffectiveNotePalette */
 /** @typedef {Readonly<{variantId: string, chartId: string, mode: "flow" | "boxing", rulesetId: string, recipeId: string | null, modifierIds: readonly string[], ranked: boolean, localOnly: boolean, mapHash: Readonly<Record<string, unknown>>, scoreIdentityHash: Readonly<Record<string, unknown>>, provenance: Readonly<Record<string, unknown>>, chart: DataRecord}>} RuntimeVariant */
-
-const maximumEventTimelineMs = 24 * 60 * 60 * 1000;
 
 /**
  * Narrow and verify one canonical package and return its immutable variant catalog.
@@ -23,13 +26,19 @@ export async function validateRuntimePackage(packageValue, options = {}) {
   const packageRecord = /** @type {DataRecord} */ (cloneFrozenData(packageValue, runtimePackageDataLimits));
   requireString(packageRecord.schemaId, "package_schema_invalid");
   if ((packageRecord.schemaId === "aerobeat.song-package.v1" && packageRecord.schemaVersion === 1) || (packageRecord.schemaId === "aerobeat.song-package.v2" && packageRecord.schemaVersion === 2)) throw dataError("flow_obstacle_reimport_required", "Prior-contract package requires reimport for normalized obstacle geometry");
-  if (packageRecord.schemaId !== "aerobeat.song-package.v3" || packageRecord.schemaVersion !== 3 || packageRecord.packageVersion !== "3.0.0") throw dataError("package_schema_invalid", "Song package schema/version is unsupported");
+  if (packageRecord.schemaId === "aerobeat.song-package.v3" && packageRecord.schemaVersion === 3) throw dataError("note_palette_reimport_required", "Version 3 packages require reimport for authored note-palette integrity");
+  if (packageRecord.schemaId !== "aerobeat.song-package.v4" || packageRecord.schemaVersion !== 4 || packageRecord.packageVersion !== "4.0.0") throw dataError("package_schema_invalid", "Song package schema/version is unsupported");
   const packageId = requireString(packageRecord.packageId, "package_identity_invalid");
   const songId = requireString(packageRecord.songId, "package_identity_invalid");
   const song = requireRecord(packageRecord.song, "song_invalid");
+  if (["notePalette", "paletteHash", "appearanceColor", "provenance"].some((key) => Object.hasOwn(song, key))) throw dataError("song_palette_forbidden", "Public song metadata cannot carry private palette fields");
   if (song.songId !== songId) throw dataError("song_identity_mismatch", "Package and song identities do not match");
-  validateSource(packageRecord.source);
+  const packageSource = validateSource(packageRecord.source);
   const converterProfile = await validatePackageConverterProfile(packageRecord);
+  const beatToTimelineMs = readTimingMapper(song);
+  const notePalette = await validateAuthoredPalette(packageRecord.notePalette);
+  validatePaletteSourceBinding(notePalette, packageSource);
+  const effectiveNotePalette = await createEffectivePalette(notePalette);
   const bpm = readBpm(song);
   const charts = requireArray(packageRecord.charts, "charts_invalid");
   if (charts.length !== 5) throw dataError("chart_count_invalid", "Package must contain Flow plus exactly four Boxing prototype charts");
@@ -38,23 +47,31 @@ export async function validateRuntimePackage(packageValue, options = {}) {
   const variants = [];
   const matrix = new Set();
   let flowCount = 0;
+  let flowContentHash = "";
   for (let index = 0; index < charts.length; index += 1) {
     const chart = requireRecord(charts[index], "chart_invalid");
     const chartId = requireString(chart.chartId, "chart_identity_invalid");
     if (chartIds.has(chartId)) throw dataError("chart_identity_duplicate", "Chart IDs must be unique");
     chartIds.add(chartId);
     const beats = requireArray(chart.beats, "chart_beats_invalid");
-    validateEvents(beats, chart.mode === "boxing", bpm);
+    validateEvents(beats, chart.mode === "boxing", beatToTimelineMs);
     let rulesetId = "flow_grid_v2";
     let recipeId = null;
     /** @type {string[]} */
     let modifierIds = [];
     let declaredChartHash = "";
+    let scoringChartHash = "";
     if (chart.mode === "flow") {
       flowCount += 1;
-      if (chart.schemaId !== "aerobeat.chart.flow.v3" || chart.schemaVersion !== 3 || chart.rulesetId !== "flow_grid_v2") throw dataError("flow_chart_schema_invalid", "Flow chart must use normalized obstacle schema/ruleset v3");
-      declaredChartHash = await sha256Hex(canonicalJson(chart));
+      if (chart.schemaId !== "aerobeat.chart.flow.v4" || chart.schemaVersion !== 4 || chart.rulesetId !== "flow_grid_v2") throw dataError("flow_chart_schema_invalid", "Flow chart must use note-palette-aware normalized obstacle schema/ruleset v4");
+      validateFlowPaletteReference(chart.notePalette, notePalette);
+      const expectedFlowContentHash = `sha256:${await sha256Hex(canonicalJson({ beats, rulesetId: chart.rulesetId, notePalette: chart.notePalette }))}`;
+      if (requireHashString(chart.contentHash, "flow_content_hash_invalid") !== expectedFlowContentHash) throw dataError("flow_content_hash_mismatch", `Flow chart ${chartId} failed palette-bound content-hash verification`);
+      flowContentHash = expectedFlowContentHash;
+      declaredChartHash = expectedFlowContentHash.slice(7);
+      scoringChartHash = await sha256Hex(canonicalJson(flowScoringProjection(chart)));
     } else if (chart.mode === "boxing") {
+      if (Object.hasOwn(chart, "notePalette") || Object.hasOwn(chart, "paletteHash")) throw dataError("boxing_palette_forbidden", "Boxing charts cannot carry Flow note-palette fields");
       const prototype = requireRecord(chart.prototype, "prototype_invalid");
       await validateChartConverterProfile(prototype, converterProfile);
       if (prototype.contractId !== "aerobeat.boxing.prototype.v1") throw dataError("prototype_contract_invalid", "Boxing prototype contract is unsupported");
@@ -74,12 +91,13 @@ export async function validateRuntimePackage(packageValue, options = {}) {
       declaredChartHash = requireHashString(prototype.contentHash, "chart_hash_invalid").slice(7);
       const actualChartHash = await sha256Hex(canonicalJson(chartHashProjection(beats, recipeId, rulesetId, `sha256:${sourceHash.slice(7)}`, converterProfile)));
       if (actualChartHash !== declaredChartHash) throw dataError("chart_hash_mismatch", `Chart ${chartId} failed content-hash verification`);
+      scoringChartHash = declaredChartHash;
       matrix.add(`${recipeId}|${rulesetId}`);
     } else {
       throw dataError("chart_mode_invalid", "Only Flow and Boxing charts are supported");
     }
     const mapHash = contentHash(declaredChartHash);
-    const scoreValue = await sha256Hex(canonicalJson({ packageId, chartId, rulesetId, recipeId, modifierIds, mapHash: declaredChartHash, ranked: true }));
+    const scoreValue = await sha256Hex(canonicalJson({ packageId, chartId, rulesetId, recipeId, modifierIds, mapHash: scoringChartHash, ranked: true }));
     variants.push(Object.freeze({
       variantId: chartId,
       chartId,
@@ -96,6 +114,7 @@ export async function validateRuntimePackage(packageValue, options = {}) {
     }));
   }
   if (flowCount !== 1) throw dataError("flow_variant_invalid", "Package must contain exactly one Flow chart");
+  validateFlowTraceBinding(packageRecord.conversionTrace, notePalette, flowContentHash);
   const expectedMatrix = conversionRecipeIds.flatMap((recipe) => ["boxing_semantic_track_v1", "boxing_spatial_grid_v1"].map((ruleset) => `${recipe}|${ruleset}`));
   if (!expectedMatrix.every((identity) => matrix.has(identity))) throw dataError("boxing_matrix_incomplete", "Package does not contain all four Boxing prototype variants");
   validateSets(packageRecord.sets, chartIds);
@@ -108,6 +127,8 @@ export async function validateRuntimePackage(packageValue, options = {}) {
     packageHash: contentHash(packageHashValue),
     song,
     bpm,
+    beatToTimelineMs,
+    effectiveNotePalette,
     variants: Object.freeze(variants),
     source: isPlainDataRecord(packageRecord.source) ? packageRecord.source : Object.freeze(Object.create(null))
   });
@@ -158,10 +179,13 @@ export async function composeRuntimeVariant(base, requestedModifiers, packageId)
     if (converterProfile) prototype.converterProfile = cloneMutable(converterProfile);
     prototype.contentHash = `sha256:${await sha256Hex(canonicalJson(chartHashProjection(beats, base.recipeId, base.rulesetId, requireHashString(prototype.sourceHash, "source_hash_invalid"), converterProfile)))}`;
     chartCopy.prototype = prototype;
+  } else {
+    chartCopy.contentHash = `sha256:${await sha256Hex(canonicalJson({ beats, rulesetId: chartCopy.rulesetId, notePalette: chartCopy.notePalette }))}`;
   }
   const frozenChart = /** @type {DataRecord} */ (cloneFrozenData(chartCopy));
-  const mapHashValue = await sha256Hex(canonicalJson(frozenChart));
-  const scoreValue = await sha256Hex(canonicalJson({ packageId, chartId, rulesetId: base.rulesetId, recipeId: base.recipeId, modifiers, mapHashValue, ranked: false }));
+  const mapHashValue = base.mode === "flow" ? requireHashString(frozenChart.contentHash, "flow_content_hash_invalid").slice(7) : await sha256Hex(canonicalJson(frozenChart));
+  const scoringMapHashValue = base.mode === "flow" ? await sha256Hex(canonicalJson(flowScoringProjection(frozenChart))) : mapHashValue;
+  const scoreValue = await sha256Hex(canonicalJson({ packageId, chartId, rulesetId: base.rulesetId, recipeId: base.recipeId, modifiers, mapHashValue: scoringMapHashValue, ranked: false }));
   return Object.freeze({
     variantId: chartId,
     chartId,
@@ -256,12 +280,18 @@ function sameProfile(left, right) { return canonicalJson(left) === canonicalJson
 /** @param {readonly unknown[]} beats @param {string | null} recipeId @param {string} rulesetId @param {string} sourceHash @param {Readonly<Record<string, unknown>> | null} converterProfile */
 function chartHashProjection(beats, recipeId, rulesetId, sourceHash, converterProfile) { return { beats, recipeId, rulesetId, sourceHash, ...(converterProfile ? { converterProfile } : {}) }; }
 
-/** @param {unknown} sourceValue */
+/** @param {unknown} sourceValue @returns {DataRecord} */
 function validateSource(sourceValue) {
   const source = requireRecord(sourceValue, "source_provenance_invalid");
+  if (["notePalette", "paletteHash", "appearanceColor"].some((key) => Object.hasOwn(source, key))) throw dataError("source_palette_forbidden", "Package source cannot carry runtime palette fields");
   for (const key of ["provider", "sourceId", "sourceVersionHash", "difficulty", "sourceDifficultyPath"]) requireString(source[key], "source_provenance_invalid");
-  requireHashString(source.sourceHash, "source_hash_invalid");
+  for (const key of ["sourceHash", "sourceInfoHash", "sourceDifficultyHash"]) requireHashString(source[key], "source_hash_invalid");
+  if (source.sourceInfoFormat !== "v2" && source.sourceInfoFormat !== "v4") throw dataError("source_format_provenance_invalid", "Source Info format must be v2 or v4");
+  if (source.sourceBeatmapFormat !== "v2" && source.sourceBeatmapFormat !== "v3" && source.sourceBeatmapFormat !== "v4") throw dataError("source_format_provenance_invalid", "Source beatmap format must be v2, v3, or v4");
+  if ((source.sourceInfoFormat === "v2" && source.sourceBeatmapFormat === "v4") || (source.sourceInfoFormat === "v4" && source.sourceBeatmapFormat !== "v4")) throw dataError("source_format_provenance_invalid", "Info v2 supports beatmap v2/v3 only; Info v4 requires beatmap v4");
+  for (const key of ["sourceInfoVersion", "sourceBeatmapVersion"]) if (source[key] !== null && (typeof source[key] !== "string" || !/^\d+\.\d+\.\d+$/u.test(String(source[key])))) throw dataError("source_format_provenance_invalid", "Source format versions must be null or exact semantic versions");
   if (source.obstacleContract !== "normalized_obstacle_v2") throw dataError("obstacle_contract_invalid", "Package source must bind normalized_obstacle_v2");
+  return source;
 }
 
 /** @param {unknown} setsValue @param {Set<string>} chartIds */
@@ -279,17 +309,18 @@ function validateSets(setsValue, chartIds) {
   if ([...chartIds].some((chartId) => !linkedCharts.has(chartId))) throw dataError("set_reference_missing", "Every chart must have a set reference");
 }
 
-/** @param {readonly unknown[]} beats @param {boolean} boxing @param {number} bpm */
-function validateEvents(beats, boxing, bpm) {
+/** @param {readonly unknown[]} beats @param {boolean} boxing @param {(beat:number)=>number} beatToTimelineMs */
+function validateEvents(beats, boxing, beatToTimelineMs) {
   const ids = new Set();
   const lineageOwners = new Set();
   let obstacleCount = 0;
   for (let index = 0; index < beats.length; index += 1) {
     const beat = requireRecord(beats[index], "event_invalid");
+    if (["appearanceColor", "notePalette", "paletteHash"].some((key) => Object.hasOwn(beat, key))) throw dataError(boxing ? "boxing_palette_forbidden" : "authored_appearance_forbidden", `Event ${index} cannot carry runtime palette appearance fields`);
     if (!Number.isFinite(beat.start) || Number(beat.start) < 0 || typeof beat.type !== "string" || beat.type.length === 0) throw dataError("event_shape_invalid", `Event ${index} is invalid`);
-    requireBoundedEventTimestamp(beat.start, bpm, index, "start");
+    requireBoundedEventTimestamp(beat.start, beatToTimelineMs, index, "start");
     if (Object.hasOwn(beat, "end") && (!Number.isFinite(beat.end) || Number(beat.end) < Number(beat.start))) throw dataError("event_interval_invalid", `Event ${index} interval is invalid`);
-    if (Object.hasOwn(beat, "end")) requireBoundedEventTimestamp(beat.end, bpm, index, "end");
+    if (Object.hasOwn(beat, "end")) requireBoundedEventTimestamp(beat.end, beatToTimelineMs, index, "end");
     if (!boxing && beat.type === "obstacle") {
       obstacleCount += 1;
       const keys = ["start", "end", "type", "sourceGeometry", "gameplayGeometry", "gridMask"];
@@ -318,11 +349,21 @@ function validateEvents(beats, boxing, bpm) {
 /** @param {readonly number[]} cells */
 function obstacleActionForCells(cells) { let left=0,right=0; for(const cell of cells) cell%4<=1?left+=1:right+=1; return left>right?"weave_right":right>left?"weave_left":"squat"; }
 
-/** @param {unknown} beatValue @param {number} bpm @param {number} index @param {"start"|"end"} field */
-function requireBoundedEventTimestamp(beatValue, bpm, index, field) {
-  const timestampMs = Number(beatValue) * 60_000 / bpm;
-  if (!Number.isFinite(timestampMs) || timestampMs > maximumEventTimelineMs) throw dataError("event_timeline_invalid", `Event ${index} ${field} exceeds the 24-hour runtime timeline`);
-  return timestampMs;
+/** @param {unknown} beatValue @param {(beat:number)=>number} beatToTimelineMs @param {number} index @param {"start"|"end"} field */
+function requireBoundedEventTimestamp(beatValue, beatToTimelineMs, index, field) {
+  try { return beatToTimelineMs(Number(beatValue)); }
+  catch { throw dataError("event_timeline_invalid", `Event ${index} ${field} exceeds the 24-hour runtime timeline`); }
+}
+
+/** @param {DataRecord} song */
+function readTimingMapper(song) {
+  try {
+    const timing = plainRecordForContract(song.timing, "song_timing_invalid");
+    timing.tempoSegments = requireArray(timing.tempoSegments, "song_timing_invalid").map((value) => plainRecordForContract(value, "song_timing_invalid"));
+    timing.stopSegments = requireArray(timing.stopSegments, "song_timing_invalid").map((value) => plainRecordForContract(value, "song_timing_invalid"));
+    timing.timeSignatureSegments = requireArray(timing.timeSignatureSegments, "song_timing_invalid").map((value) => plainRecordForContract(value, "song_timing_invalid"));
+    return createAuthoredBeatToTimelineMs(timing);
+  } catch { throw dataError("song_timing_invalid", "Song timing must be exact, ordered, finite, and bounded to 24 hours"); }
 }
 
 /** @param {DataRecord} song */
@@ -334,6 +375,73 @@ function readBpm(song) {
   return Number(first.bpm);
 }
 
+/** @param {unknown} value @returns {Promise<import("@aerobeat/web-contracts").AeroAuthoredNotePalette | null>} */
+async function validateAuthoredPalette(value) {
+  if (value === null) return null;
+  const normalized = plainRecordForContract(value, "note_palette_invalid");
+  normalized.provenance = plainRecordForContract(normalized.provenance, "note_palette_invalid");
+  if (!isAuthoredNotePalette(normalized)) throw dataError("note_palette_invalid", "Authored note palette has an invalid shape");
+  const palette = /** @type {import("@aerobeat/web-contracts").AeroAuthoredNotePalette} */ (normalized);
+  const base = { schema: palette.schema, version: palette.version, left: palette.left, right: palette.right, colorSpace: palette.colorSpace, alpha: palette.alpha, provenance: palette.provenance };
+  const actualHash = `sha256:${await sha256Hex(canonicalJson(base))}`;
+  if (palette.paletteHash !== actualHash) throw dataError("note_palette_hash_mismatch", "Authored note palette failed canonical hash verification");
+  return Object.freeze({ ...palette, provenance: Object.freeze({ ...palette.provenance }) });
+}
+
+/** @param {import("@aerobeat/web-contracts").AeroAuthoredNotePalette | null} palette @param {DataRecord} source */
+function validatePaletteSourceBinding(palette, source) {
+  if (palette === null) return;
+  if (palette.provenance.infoFormat !== source.sourceInfoFormat || palette.provenance.infoHash !== source.sourceInfoHash || palette.provenance.difficultyHash !== source.sourceDifficultyHash) throw dataError("note_palette_provenance_mismatch", "Authored note palette must bind the exact package source Info and difficulty hashes");
+}
+
+/** @param {import("@aerobeat/web-contracts").AeroAuthoredNotePalette | null} palette @returns {Promise<AeroEffectiveNotePalette>} */
+async function createEffectivePalette(palette) {
+  const body = palette === null
+    ? { schema: /** @type {const} */ ("aerobeat/effective_note_palette"), version: /** @type {const} */ (1), left: defaultNotePalette.left, right: defaultNotePalette.right, colorSpace: /** @type {const} */ ("srgb"), source: /** @type {const} */ ("aerobeat_default") }
+    : { schema: /** @type {const} */ ("aerobeat/effective_note_palette"), version: /** @type {const} */ (1), left: palette.left, right: palette.right, colorSpace: /** @type {const} */ ("srgb"), source: /** @type {const} */ ("song") };
+  const result = /** @type {AeroEffectiveNotePalette} */ (Object.freeze({ ...body, paletteHash: `sha256:${await sha256Hex(canonicalJson(body))}` }));
+  if (!isEffectiveNotePalette(result)) throw dataError("effective_note_palette_invalid", "Effective note palette could not be constructed");
+  return result;
+}
+
+/** @param {unknown} referenceValue @param {import("@aerobeat/web-contracts").AeroAuthoredNotePalette | null} palette */
+function validateFlowPaletteReference(referenceValue, palette) {
+  if (palette === null) {
+    if (referenceValue !== null) throw dataError("flow_note_palette_mismatch", "Flow palette reference must match the package palette");
+    return;
+  }
+  if (!hasExactDataKeys(referenceValue, ["source", "paletteHash"])) throw dataError("flow_note_palette_mismatch", "Flow palette reference has an invalid shape");
+  const reference = /** @type {DataRecord} */ (referenceValue);
+  if (reference.source !== "package" || reference.paletteHash !== palette.paletteHash) throw dataError("flow_note_palette_mismatch", "Flow palette reference must bind the exact package palette hash");
+}
+
+/** @param {unknown} traceValue @param {import("@aerobeat/web-contracts").AeroAuthoredNotePalette | null} palette @param {string} flowContentHash */
+function validateFlowTraceBinding(traceValue, palette, flowContentHash) {
+  const trace = requireRecord(traceValue, "note_palette_trace_mismatch");
+  try { validateFlowPaletteReference(trace.notePalette, palette); }
+  catch { throw dataError("note_palette_trace_mismatch", "Top conversion trace must bind the package note palette reference"); }
+  const flowTraces = requireArray(trace.flow, "flow_trace_invalid");
+  if (flowTraces.length !== 1) throw dataError("flow_trace_invalid", "Package must carry exactly one Flow conversion trace");
+  const flowTrace = requireRecord(flowTraces[0], "flow_trace_invalid");
+  try { validateFlowPaletteReference(flowTrace.notePalette, palette); }
+  catch { throw dataError("flow_trace_invalid", "Flow conversion trace must bind the package note palette reference"); }
+  if (flowTrace.contentHash !== flowContentHash) throw dataError("flow_trace_content_hash_mismatch", "Flow conversion trace must bind the exact Flow content hash");
+}
+
+/** @param {DataRecord} chart */
+function flowScoringProjection(chart) {
+  const result = Object.create(null);
+  for (const key of Object.keys(chart)) if (key !== "notePalette" && key !== "contentHash") result[key] = chart[key];
+  return result;
+}
+
+/** @param {unknown} value @param {string} code @returns {Record<string, unknown>} */
+function plainRecordForContract(value, code) {
+  const record = requireRecord(value, code);
+  const result = {};
+  for (const key of Reflect.ownKeys(record)) Object.defineProperty(result, key, { configurable: true, enumerable: true, writable: true, value: record[key] });
+  return result;
+}
 /** @param {unknown} value @param {string} code @returns {DataRecord} */
 function requireRecord(value, code) { if (!isPlainDataRecord(value)) throw dataError(code, "Expected a plain content record"); return value; }
 /** @param {unknown} value @param {string} code @returns {readonly unknown[]} */
