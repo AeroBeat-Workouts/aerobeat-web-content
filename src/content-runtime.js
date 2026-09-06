@@ -17,6 +17,7 @@ import { cloneFrozenData, compareCodePoints, dataError, dataProperty, diagnostic
 /** @typedef {import("./assets.js").LoadedAsset} LoadedAsset */
 
 const internalRenderProjectionSymbol = Symbol.for("aerobeat.web-content.internal-render-projection");
+const BOXING_PUNCH_HANDS=/** @type {Readonly<Record<string,"left"|"right">>} */(Object.freeze({straight_left:"left",straight_right:"right",hook_left:"left",hook_right:"right",uppercut_left:"left",uppercut_right:"right"}));
 
 /** @type {Readonly<Record<string, unknown>>} */
 export const aeroContentRuntimeCapabilities = Object.freeze({
@@ -434,7 +435,7 @@ function projectRenderEvents(events, modeFor, palette) {
     const beat = isPlainDataRecord(event.authoredBeat) ? event.authoredBeat : null,mode=modeFor(event);
     /** @type {"left"|"right"|null} */ let hand=null;
     if(mode==="flow"&&beat?.type==="note"&&(beat.hand==="left"||beat.hand==="right")&&(beat.requiresDirection===true||beat.requiresDirection===false))hand=beat.hand;
-    else if(mode==="boxing"&&beat){const match=/^(?:straight|hook|uppercut)_(left|right)$/u.exec(String(beat.type));if(match)hand=/** @type {"left"|"right"} */(match[1]);}
+    else if(mode==="boxing"&&beat){const type=String(beat.type);if(Object.hasOwn(BOXING_PUNCH_HANDS,type))hand=BOXING_PUNCH_HANDS[type]??null;}
     if(hand!=="left"&&hand!=="right")return event;
     return Object.freeze({ ...event, appearanceColor: hand === "left" ? palette.left : palette.right });
   }));

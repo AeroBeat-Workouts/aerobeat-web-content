@@ -15,6 +15,8 @@ import {
 } from "../src/index.js";
 import { cloneFrozenData } from "../src/runtime-data.js";
 
+const BOXING_PUNCH_TYPES=Object.freeze(["straight_left","straight_right","hook_left","hook_right","uppercut_left","uppercut_right"]);
+const BOXING_FIXED_TYPES=Object.freeze(["squat","guard","weave_left","weave_right"]);
 const audioBytes = new TextEncoder().encode("deterministic-audio-fixture");
 const audioHash = hashBytes(audioBytes);
 const basePackage = await makePackage(audioHash);
@@ -137,10 +139,10 @@ const preservedPaletteNote = paletteRuntime[projectionSymbol]().find((event) => 
 await paletteRuntime.swapFutureVariant(paletteFlowId, { modifierIds: ["no_obstacles"] });
 assert.equal(paletteRuntime[projectionSymbol]().some((event) => event.authoredBeat.type === "obstacle"), false);
 assert.equal(paletteRuntime[projectionSymbol]().find((event) => event.eventId === preservedPaletteNote?.eventId)?.appearanceColor, "#FF0000", "future swaps retain the generation-effective palette without public leakage");
-const paletteBoxingId = paletteRuntime.getSnapshot().variants.find((variant) => variant.mode === "boxing").variantId;
-await paletteRuntime.swapFutureVariant(paletteBoxingId);
+const paletteBoxingVariants = paletteRuntime.getSnapshot().variants.filter((variant) => variant.mode === "boxing");
+await paletteRuntime.swapFutureVariant(paletteBoxingVariants[0].variantId);
 assert.equal(paletteRuntime[projectionSymbol]().find((event) => event.eventId === preservedPaletteNote?.eventId)?.appearanceColor, "#FF0000", "cross-mode swaps retain appearance for preserved Flow notes");
-const paletteBoxingEvents=paletteRuntime[projectionSymbol]().filter((event)=>event.variantId===paletteBoxingId);assert.deepEqual(paletteBoxingEvents.filter((event)=>Object.hasOwn(event,"appearanceColor")).map((event)=>[event.authoredBeat.type,event.appearanceColor]),[["straight_left","#FF0000"],["hook_right","#808080"]],"cross-mode replacement colors only Boxing punch cues by authored hand");assert.equal(paletteBoxingEvents.filter((event)=>!/^(?:straight|hook|uppercut)_(?:left|right)$/u.test(String(event.authoredBeat.type))).every((event)=>!Object.hasOwn(event,"appearanceColor")),true,"Boxing body/guard obstacles remain fixed-color");
+for(const variant of paletteBoxingVariants){await paletteRuntime.selectVariant(variant.variantId);const events=paletteRuntime[projectionSymbol]().filter((event)=>event.variantId===variant.variantId);assert.deepEqual(events.filter((event)=>Object.hasOwn(event,"appearanceColor")).map((event)=>[event.authoredBeat.type,event.appearanceColor]),boxingColorExpectation("#FF0000","#808080"),`all six canonical punches use deterministic custom hand colors for ${variant.variantId}`);assert.deepEqual(events.filter((event)=>BOXING_FIXED_TYPES.includes(event.authoredBeat.type)).map((event)=>[event.authoredBeat.type,Object.hasOwn(event,"appearanceColor")]),BOXING_FIXED_TYPES.map((type)=>[type,false]),`guard and three Boxing obstacle types remain fixed-color for ${variant.variantId}`);}
 const stalePaletteEvents = paletteRuntime[projectionSymbol]();
 await paletteRuntime.loadPackage({ package: basePackage, assets: [{ path: "song.ogg", bytes: audioBytes }] });
 assert.notEqual(paletteRuntime[projectionSymbol](), stalePaletteEvents);
@@ -372,7 +374,7 @@ assert.equal(snapshot.resolvedEvents.some((event) => event.authoredBeat.type ===
 const crossed = snapshot.resolvedEvents.find((event) => event.authoredBeat.type === "guard");
 assert.equal(crossed.authoredBeat.guardTarget.crossed, true);
 assert.deepEqual(crossed.authoredBeat.sourceEventIds, ["source-guard"]);
-const boxingRenderEvents=runtime[projectionSymbol]();assert.deepEqual(boxingRenderEvents.filter((event)=>Object.hasOwn(event,"appearanceColor")).map((event)=>[event.authoredBeat.type,event.appearanceColor]),[["straight_left","#2693FF"],["hook_right","#39C96B"]],"Boxing punch cues receive effective fallback colors by left/right hand");assert.equal(boxingRenderEvents.filter((event)=>["guard","squat","weave_right"].includes(event.authoredBeat.type)).every((event)=>!Object.hasOwn(event,"appearanceColor")),true,"Boxing guards and body obstacles remain fixed-color");assert.equal(snapshot.resolvedEvents.every((event)=>!Object.hasOwn(event,"appearanceColor")),true,"Boxing appearance remains private to the renderer projection");
+const boxingRenderEvents=runtime[projectionSymbol]();assert.deepEqual(boxingRenderEvents.filter((event)=>Object.hasOwn(event,"appearanceColor")).map((event)=>[event.authoredBeat.type,event.appearanceColor]),boxingColorExpectation("#2693FF","#39C96B"),"all six canonical Boxing punches receive deterministic fallback colors");assert.deepEqual(boxingRenderEvents.filter((event)=>BOXING_FIXED_TYPES.includes(event.authoredBeat.type)).map((event)=>[event.authoredBeat.type,Object.hasOwn(event,"appearanceColor")]),[["guard",false],["weave_left",false],["weave_right",false]],"Boxing guard and retained body obstacles remain fixed-color under modifiers");assert.equal(snapshot.resolvedEvents.every((event)=>!Object.hasOwn(event,"appearanceColor")),true,"Boxing appearance remains private to the renderer projection");
 const emittedPackage = structuredClone(basePackage);
 emittedPackage.charts[0].prototype.modifiers = ["crossed_guard"];
 const emittedRuntime = createAeroContentRuntime();
@@ -604,6 +606,7 @@ console.log("Content runtime unit checks passed.");
 /** @param {string} expected */
 function hasCode(expected) { return (error) => Boolean(error && typeof error === "object" && "code" in error && error.code === expected); }
 /** @param {Uint8Array} bytes */
+function boxingColorExpectation(left,right){return [["straight_left",left],["straight_right",right],["hook_left",left],["hook_right",right],["uppercut_left",left],["uppercut_right",right]];}
 function hashBytes(bytes) { return createHash("sha256").update(bytes).digest("hex"); }
 /** @param {unknown} value */
 function hashJson(value) { return hashBytes(new TextEncoder().encode(canonical(value))); }
@@ -653,9 +656,9 @@ async function makePackage(declaredAudioHash, converterProfile = null) {
     const beats = [
       { start: 1, end: 2, type: "squat", eventId: `${token}-squat`, sourceEventIds: ["source-squat"], sourceGeometry: { schema:"aerobeat/obstacle_source_geometry",version:1,coordinateSpace:"beatsaber_v3_obstacle_rect",kind:"v3_rect",x:0,y:2,width:4,height:1 }, gameplayGeometry: { schema:"aerobeat/obstacle_gameplay_geometry",version:1,coordinateSpace:"aerobeat_top_left_grid",x:0,y:0,width:4,height:1 }, gridMask: [0, 1, 2, 3], blockedCells: [0, 1, 2, 3], checkpoint: { kind: "instantaneous", freshnessMs: 150, timingWindowMs: 180, noseSafeCells: [4, 5, 6, 7, 8, 9, 10, 11] } },
       { start: 2, type: "guard", eventId: `${token}-guard`, sourceEventIds: ["source-guard"], guardTarget: { leftCell: 4, rightCell: 7 }, checkpoint: { kind: "instantaneous" } },
-      { start: 3, type: "straight_left", eventId: `${token}-punch-a`, sourceEventIds: ["source-punch-a"], spatialTarget: { targetCell: 5, acceptedSubcells: [20, 21], sourceCell: 9, qualificationMs: 100 } },
-      { start: 4, type: "hook_right", eventId: `${token}-punch-b`, sourceEventIds: ["source-punch-b"], spatialTarget: { targetCell: 6, acceptedSubcells: [26, 27], sourceCell: 5, entryDirection: "left" } },
-      { start: 5, end: 6, type: "weave_right", eventId: `${token}-weave`, sourceEventIds: ["source-weave"], sourceGeometry: { schema:"aerobeat/obstacle_source_geometry",version:1,coordinateSpace:"beatsaber_v3_obstacle_rect",kind:"v3_rect",x:0,y:0,width:1,height:3 }, gameplayGeometry: { schema:"aerobeat/obstacle_gameplay_geometry",version:1,coordinateSpace:"aerobeat_top_left_grid",x:0,y:0,width:1,height:3 }, gridMask: [0,4,8], blockedCells: [0,4,8], checkpoint: { kind: "instantaneous", freshnessMs: 150, timingWindowMs: 180, noseSafeCells: [1,2,3,5,6,7,9,10,11] } }
+      ...BOXING_PUNCH_TYPES.map((type,index)=>({ start:3+index,type,eventId:`${token}-${type}`,sourceEventIds:[`source-${type}`],spatialTarget:{targetCell:index%2===0?5:6,acceptedSubcells:index%2===0?[20,21]:[26,27],sourceCell:index%2===0?9:5,...(index%2===0?{qualificationMs:100}:{entryDirection:"left"})} })),
+      { start: 9, end: 10, type: "weave_left", eventId: `${token}-weave-left`, sourceEventIds: ["source-weave-left"], sourceGeometry: { schema:"aerobeat/obstacle_source_geometry",version:1,coordinateSpace:"beatsaber_v3_obstacle_rect",kind:"v3_rect",x:3,y:0,width:1,height:3 }, gameplayGeometry: { schema:"aerobeat/obstacle_gameplay_geometry",version:1,coordinateSpace:"aerobeat_top_left_grid",x:3,y:0,width:1,height:3 }, gridMask: [3,7,11], blockedCells: [3,7,11], checkpoint: { kind: "instantaneous", freshnessMs: 150, timingWindowMs: 180, noseSafeCells: [0,1,2,4,5,6,8,9,10] } },
+      { start: 10, end: 11, type: "weave_right", eventId: `${token}-weave-right`, sourceEventIds: ["source-weave-right"], sourceGeometry: { schema:"aerobeat/obstacle_source_geometry",version:1,coordinateSpace:"beatsaber_v3_obstacle_rect",kind:"v3_rect",x:0,y:0,width:1,height:3 }, gameplayGeometry: { schema:"aerobeat/obstacle_gameplay_geometry",version:1,coordinateSpace:"aerobeat_top_left_grid",x:0,y:0,width:1,height:3 }, gridMask: [0,4,8], blockedCells: [0,4,8], checkpoint: { kind: "instantaneous", freshnessMs: 150, timingWindowMs: 180, noseSafeCells: [1,2,3,5,6,7,9,10,11] } }
     ];
     const contentHash = hashJson({ beats, recipeId, rulesetId, sourceHash, ...(converterProfile ? { converterProfile } : {}) });
     charts.push({ schemaId: "aerobeat.chart.boxing.v1", schemaVersion: 1, recordVersion: 1, chartId: `chart-${token}`, chartName: token, mode: "boxing", difficulty: "Expert", prototype: { contractId: "aerobeat.boxing.prototype.v1", recipeId, recipeVersion: "1.0.0", rulesetId, rulesetVersion: "1.0.0", sourceHash, recipeHash: `sha256:${"1".repeat(64)}`, rulesetHash: `sha256:${"2".repeat(64)}`, contentHash: `sha256:${contentHash}`, modifiers: [], ...(converterProfile ? { converterProfile: structuredClone(converterProfile) } : {}), regenerationRequiredFor: [] }, beats });
