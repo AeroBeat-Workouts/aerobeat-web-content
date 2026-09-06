@@ -15,8 +15,9 @@ import {
 } from "../src/index.js";
 import { cloneFrozenData } from "../src/runtime-data.js";
 
-const BOXING_PUNCH_TYPES=Object.freeze(["straight_left","straight_right","hook_left","hook_right","uppercut_left","uppercut_right"]);
+const BOXING_PUNCH_CASES=Object.freeze([Object.freeze({type:"straight_left",hand:"left"}),Object.freeze({type:"straight_right",hand:"right"}),Object.freeze({type:"hook_left",hand:"left"}),Object.freeze({type:"hook_right",hand:"right"}),Object.freeze({type:"uppercut_left",hand:"left"}),Object.freeze({type:"uppercut_right",hand:"right"})]);
 const BOXING_FIXED_TYPES=Object.freeze(["squat","guard","weave_left","weave_right"]);
+const BOXING_VARIANT_MATRIX=Object.freeze([["row_family_balanced_height_v1","boxing_semantic_track_v1","boxing_lanes"],["row_family_balanced_height_v1","boxing_spatial_grid_v1","boxing_spatial_grid"],["cut_family_source_height_v1","boxing_semantic_track_v1","boxing_lanes"],["cut_family_source_height_v1","boxing_spatial_grid_v1","boxing_spatial_grid"]].map((entry)=>Object.freeze(entry)));
 const audioBytes = new TextEncoder().encode("deterministic-audio-fixture");
 const audioHash = hashBytes(audioBytes);
 const basePackage = await makePackage(audioHash);
@@ -140,6 +141,7 @@ await paletteRuntime.swapFutureVariant(paletteFlowId, { modifierIds: ["no_obstac
 assert.equal(paletteRuntime[projectionSymbol]().some((event) => event.authoredBeat.type === "obstacle"), false);
 assert.equal(paletteRuntime[projectionSymbol]().find((event) => event.eventId === preservedPaletteNote?.eventId)?.appearanceColor, "#FF0000", "future swaps retain the generation-effective palette without public leakage");
 const paletteBoxingVariants = paletteRuntime.getSnapshot().variants.filter((variant) => variant.mode === "boxing");
+assert.deepEqual(paletteBoxingVariants.map((variant)=>[variant.recipeId,variant.rulesetId,variant.rulesetId==="boxing_semantic_track_v1"?"boxing_lanes":"boxing_spatial_grid"]),BOXING_VARIANT_MATRIX,"exact positive matrix covers both Boxing Lanes and Grid in both recipe families");
 await paletteRuntime.swapFutureVariant(paletteBoxingVariants[0].variantId);
 assert.equal(paletteRuntime[projectionSymbol]().find((event) => event.eventId === preservedPaletteNote?.eventId)?.appearanceColor, "#FF0000", "cross-mode swaps retain appearance for preserved Flow notes");
 for(const variant of paletteBoxingVariants){await paletteRuntime.selectVariant(variant.variantId);const events=paletteRuntime[projectionSymbol]().filter((event)=>event.variantId===variant.variantId);assert.deepEqual(events.filter((event)=>Object.hasOwn(event,"appearanceColor")).map((event)=>[event.authoredBeat.type,event.appearanceColor]),boxingColorExpectation("#FF0000","#808080"),`all six canonical punches use deterministic custom hand colors for ${variant.variantId}`);assert.deepEqual(events.filter((event)=>BOXING_FIXED_TYPES.includes(event.authoredBeat.type)).map((event)=>[event.authoredBeat.type,Object.hasOwn(event,"appearanceColor")]),BOXING_FIXED_TYPES.map((type)=>[type,false]),`guard and three Boxing obstacle types remain fixed-color for ${variant.variantId}`);}
@@ -606,7 +608,7 @@ console.log("Content runtime unit checks passed.");
 /** @param {string} expected */
 function hasCode(expected) { return (error) => Boolean(error && typeof error === "object" && "code" in error && error.code === expected); }
 /** @param {Uint8Array} bytes */
-function boxingColorExpectation(left,right){return [["straight_left",left],["straight_right",right],["hook_left",left],["hook_right",right],["uppercut_left",left],["uppercut_right",right]];}
+function boxingColorExpectation(left,right){return BOXING_PUNCH_CASES.map(({type,hand})=>[type,hand==="left"?left:right]);}
 function hashBytes(bytes) { return createHash("sha256").update(bytes).digest("hex"); }
 /** @param {unknown} value */
 function hashJson(value) { return hashBytes(new TextEncoder().encode(canonical(value))); }
@@ -656,7 +658,7 @@ async function makePackage(declaredAudioHash, converterProfile = null) {
     const beats = [
       { start: 1, end: 2, type: "squat", eventId: `${token}-squat`, sourceEventIds: ["source-squat"], sourceGeometry: { schema:"aerobeat/obstacle_source_geometry",version:1,coordinateSpace:"beatsaber_v3_obstacle_rect",kind:"v3_rect",x:0,y:2,width:4,height:1 }, gameplayGeometry: { schema:"aerobeat/obstacle_gameplay_geometry",version:1,coordinateSpace:"aerobeat_top_left_grid",x:0,y:0,width:4,height:1 }, gridMask: [0, 1, 2, 3], blockedCells: [0, 1, 2, 3], checkpoint: { kind: "instantaneous", freshnessMs: 150, timingWindowMs: 180, noseSafeCells: [4, 5, 6, 7, 8, 9, 10, 11] } },
       { start: 2, type: "guard", eventId: `${token}-guard`, sourceEventIds: ["source-guard"], guardTarget: { leftCell: 4, rightCell: 7 }, checkpoint: { kind: "instantaneous" } },
-      ...BOXING_PUNCH_TYPES.map((type,index)=>({ start:3+index,type,eventId:`${token}-${type}`,sourceEventIds:[`source-${type}`],spatialTarget:{targetCell:index%2===0?5:6,acceptedSubcells:index%2===0?[20,21]:[26,27],sourceCell:index%2===0?9:5,...(index%2===0?{qualificationMs:100}:{entryDirection:"left"})} })),
+      ...BOXING_PUNCH_CASES.map(({type,hand},index)=>({ start:3+index,type,eventId:`${token}-${type}`,sourceEventIds:[`source-${type}`],spatialTarget:{targetCell:hand==="left"?5:6,acceptedSubcells:hand==="left"?[20,21]:[26,27],sourceCell:hand==="left"?9:5,...(hand==="left"?{qualificationMs:100}:{entryDirection:"left"})} })),
       { start: 9, end: 10, type: "weave_left", eventId: `${token}-weave-left`, sourceEventIds: ["source-weave-left"], sourceGeometry: { schema:"aerobeat/obstacle_source_geometry",version:1,coordinateSpace:"beatsaber_v3_obstacle_rect",kind:"v3_rect",x:3,y:0,width:1,height:3 }, gameplayGeometry: { schema:"aerobeat/obstacle_gameplay_geometry",version:1,coordinateSpace:"aerobeat_top_left_grid",x:3,y:0,width:1,height:3 }, gridMask: [3,7,11], blockedCells: [3,7,11], checkpoint: { kind: "instantaneous", freshnessMs: 150, timingWindowMs: 180, noseSafeCells: [0,1,2,4,5,6,8,9,10] } },
       { start: 10, end: 11, type: "weave_right", eventId: `${token}-weave-right`, sourceEventIds: ["source-weave-right"], sourceGeometry: { schema:"aerobeat/obstacle_source_geometry",version:1,coordinateSpace:"beatsaber_v3_obstacle_rect",kind:"v3_rect",x:0,y:0,width:1,height:3 }, gameplayGeometry: { schema:"aerobeat/obstacle_gameplay_geometry",version:1,coordinateSpace:"aerobeat_top_left_grid",x:0,y:0,width:1,height:3 }, gridMask: [0,4,8], blockedCells: [0,4,8], checkpoint: { kind: "instantaneous", freshnessMs: 150, timingWindowMs: 180, noseSafeCells: [1,2,3,5,6,7,9,10,11] } }
     ];
