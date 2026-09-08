@@ -17,6 +17,7 @@ import { cloneFrozenData, compareCodePoints, dataError, dataProperty, diagnostic
 /** @typedef {import("./assets.js").LoadedAsset} LoadedAsset */
 
 const internalRenderProjectionSymbol = Symbol.for("aerobeat.web-content.internal-render-projection");
+const internalTimingMapperSymbol = Symbol.for("aerobeat.web-content.internal-timing-mapper");
 const BOXING_PUNCH_HANDS=/** @type {Readonly<Record<string,"left"|"right">>} */(Object.freeze({straight_left:"left",straight_right:"right",hook_left:"left",hook_right:"right",uppercut_left:"left",uppercut_right:"right"}));
 
 /** @type {Readonly<Record<string, unknown>>} */
@@ -222,6 +223,12 @@ export function createAeroContentRuntime(options = {}) {
     enumerable: false,
     writable: false,
     value: Object.freeze(() => renderEvents)
+  });
+  Object.defineProperty(serviceValue, internalTimingMapperSymbol, {
+    configurable: false,
+    enumerable: false,
+    writable: false,
+    value: Object.freeze((/** @type {number} */ expectedGeneration) => !destroyed && snapshot.state === "ready" && expectedGeneration === generation && loadedPackage && loadedBeatToTimelineMs ? loadedBeatToTimelineMs : null)
   });
   const service = Object.freeze(serviceValue);
   return service;

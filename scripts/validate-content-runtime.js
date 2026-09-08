@@ -83,6 +83,10 @@ assert.equal(profileComposite.chart.prototype.contentHash, `sha256:${hashJson({ 
 await verifyProfileRejections(profilePackage);
 
 const runtime = createAeroContentRuntime({ onListenerError() { throw new Error("listener error callback should be isolated too"); } });
+const timingMapperSymbol = Symbol.for("aerobeat.web-content.internal-timing-mapper");
+const timingMapperDescriptor = Object.getOwnPropertyDescriptor(runtime, timingMapperSymbol);
+assert.deepEqual({ enumerable: timingMapperDescriptor?.enumerable, writable: timingMapperDescriptor?.writable, configurable: timingMapperDescriptor?.configurable }, { enumerable: false, writable: false, configurable: false });
+assert.equal(runtime[timingMapperSymbol](runtime.getSnapshot().generation), null, "private timing mapper is unavailable before readiness");
 let listenerCalls = 0;
 runtime.subscribe(() => { listenerCalls += 1; throw new Error("expected isolated listener failure"); });
 await runtime.loadPackage({ package: basePackage, packageHash: `sha256:${packageHash}`, assets: [{ path: "song.ogg", bytes: audioBytes }] });
@@ -96,6 +100,17 @@ assert.equal(Object.isFrozen(snapshot.variants), true);
 assert.equal(JSON.stringify(snapshot).includes("deterministic-audio-fixture"), false);
 assert.deepEqual(runtime.readAsset("SONG.OGG"), audioBytes);
 assert.ok(listenerCalls >= 2);
+assert.equal(Object.getPrototypeOf(snapshot.song.timing), null, "canonical runtime timing remains an immutable null-prototype record");
+assert.equal(Object.getPrototypeOf(snapshot.song.timing.tempoSegments[0]), null, "canonical tempo segments remain null-prototype records");
+assert.throws(() => createAuthoredBeatToTimelineMs(snapshot.song.timing), /Invalid authored song timing/u, "red-before path: the public canonical null-prototype timing cannot be revalidated as caller-authored timing");
+const readyTimingMapper = runtime[timingMapperSymbol](snapshot.generation);
+assert.equal(typeof readyTimingMapper, "function", "green-after path: the ready generation exposes its already-validated private mapper");
+assert.equal(runtime[timingMapperSymbol](snapshot.generation), readyTimingMapper, "the current ready generation retains exact mapper identity");
+assert.equal(runtime[timingMapperSymbol](snapshot.generation - 1), null, "a mismatched generation cannot obtain the mapper");
+const firstResolvedEvent = snapshot.resolvedEvents[0];
+assert.equal(readyTimingMapper(firstResolvedEvent.authoredBeat.start), firstResolvedEvent.centerTimestampMs, "private mapper reproduces resolved event timing exactly");
+assert.equal(Object.keys(runtime).some((key) => key.includes("timing") || key.includes("mapper")), false, "the timing mapper seam is not a public string-keyed API");
+assert.equal(JSON.stringify(runtime).includes("internal-timing-mapper"), false, "the private mapper cannot serialize");
 const projectionSymbol = Symbol.for("aerobeat.web-content.internal-render-projection");
 const projectionDescriptor = Object.getOwnPropertyDescriptor(runtime, projectionSymbol);
 assert.deepEqual({ enumerable: projectionDescriptor?.enumerable, writable: projectionDescriptor?.writable, configurable: projectionDescriptor?.configurable }, { enumerable: false, writable: false, configurable: false });
@@ -516,6 +531,25 @@ isolatedA.destroy();
 assert.equal(isolatedA.getSnapshot().state, "destroyed");
 assert.equal(isolatedA.getSnapshot().packageId, null);
 assert.equal(isolatedB.getSnapshot().state, "ready");
+
+let releaseTimingReload;
+const delayedTimingReload = new Promise((resolve) => { releaseTimingReload = resolve; });
+const timingLifecycle = createAeroContentRuntime({ fetch: async (url) => {
+  if (String(url).endsWith("package.json")) { await delayedTimingReload; return new Response(JSON.stringify({ package: basePackage, assets: [{ path: "song.ogg", url: "https://timing.example/song.ogg", hash: audioHash }] }), { status: 200 }); }
+  return new Response(audioBytes, { status: 200 });
+} });
+await timingLifecycle.loadPackage({ package: basePackage, assets: [{ path: "song.ogg", bytes: audioBytes }] });
+const priorTimingGeneration = timingLifecycle.getSnapshot().generation;
+const priorTimingMapper = timingLifecycle[timingMapperSymbol](priorTimingGeneration);
+const timingReload = timingLifecycle.loadExternalPackage("https://timing.example/package.json");
+assert.equal(timingLifecycle.getSnapshot().state, "loading");
+assert.equal(timingLifecycle[timingMapperSymbol](priorTimingGeneration), null, "starting a new generation immediately invalidates its prior mapper");
+releaseTimingReload();
+await timingReload;
+const replacementTimingGeneration = timingLifecycle.getSnapshot().generation;
+assert.notEqual(timingLifecycle[timingMapperSymbol](replacementTimingGeneration), priorTimingMapper, "a replacement generation owns a freshly snapshotted mapper");
+timingLifecycle.destroy();
+assert.equal(timingLifecycle[timingMapperSymbol](replacementTimingGeneration), null, "destroy invalidates the current mapper");
 
 let releaseFirst;
 const delayed = new Promise((resolve) => { releaseFirst = resolve; });
