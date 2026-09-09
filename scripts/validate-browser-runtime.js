@@ -75,6 +75,17 @@ async function verifyContext(origin, secure) {
     assert.equal(evidence.sharedFlowEventObjects, true);
     assert.equal(evidence.distinctFlowScoreIdentities, true);
     assert.deepEqual(evidence.collidersPolicy, [null, false, true]);
+    assert.deepEqual(evidence.flowCompositeEvidence, {
+      distinctVariantIds:true,
+      sharedChartId:true,
+      sharedMapHash:true,
+      distinctScoreHash:true,
+      identicalAuthoredEvents:true,
+      rulesets:["flow_grid_v2","flow_colliders_v1"],
+      bases:["browser-flow","browser-flow~ruleset-flow_colliders_v1"],
+      envelopeAgreement:true,
+      gridCacheStable:true
+    });
     assert.equal(evidence.publicHasCollisionLeak, false);
     const expectedPunches=[["straight_left","#FF0000"],["straight_right","#808080"],["hook_left","#FF0000"],["hook_right","#808080"],["uppercut_left","#FF0000"],["uppercut_right","#808080"]],expectedFixed=[["guard",false],["squat",false],["weave_left",false],["weave_right",false]];
     assert.equal(evidence.boxingVariantEvidence.length,4);assert.deepEqual(evidence.boxingVariantEvidence.map((entry)=>entry.rulesetId),["boxing_semantic_track_v1","boxing_spatial_grid_v1","boxing_semantic_track_v1","boxing_spatial_grid_v1"]);for(const entry of evidence.boxingVariantEvidence){assert.deepEqual(entry.punchColors,expectedPunches,`six exact Boxing punches receive song colors in ${entry.rulesetId}`);assert.deepEqual(entry.fixed,expectedFixed,`guards and three obstacle types remain fixed in ${entry.rulesetId}`);assert.equal(entry.publicHasAppearance,false);}

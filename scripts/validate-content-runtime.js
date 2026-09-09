@@ -68,6 +68,22 @@ assert.equal(successorFlowVariants[0].scoreIdentityHash.value, predecessorScoreI
 assert.equal(successorFlowVariants[0].chart, successorFlowVariants[1].chart, "both Flow rulesets share one exact frozen chart object");
 assert.equal(successorFlowVariants[0].chart.beats, successorFlowVariants[1].chart.beats, "both Flow rulesets share one exact authored beats array");
 assert.equal(canonical(successorFlowVariants[0].chart.beats), canonical(successorFlowVariants[1].chart.beats), "both Flow rulesets resolve identical authored beat bytes");
+const compositeModifiers = ["obstacle_visual_only"];
+const [successorGridComposite, successorColliderComposite, repeatedColliderComposite] = await Promise.all([
+  composeRuntimeVariant(successorFlowVariants[0], compositeModifiers, successorValidation.packageId),
+  composeRuntimeVariant(successorFlowVariants[1], compositeModifiers, successorValidation.packageId),
+  composeRuntimeVariant(successorFlowVariants[1], [...compositeModifiers].reverse(), successorValidation.packageId)
+]);
+assert.notEqual(successorGridComposite.variantId, successorColliderComposite.variantId, "same-modifier Flow rulesets require distinct public composite variant identities");
+assert.equal(successorGridComposite.chartId, successorColliderComposite.chartId, "same derived Flow chart bytes retain one map-derived chart identity");
+assert.deepEqual(successorColliderComposite, repeatedColliderComposite, "composite identity is deterministic and modifier-order canonical");
+assert.deepEqual(successorGridComposite.modifierIds, compositeModifiers);
+assert.deepEqual(successorColliderComposite.modifierIds, compositeModifiers);
+assert.deepEqual(successorGridComposite.mapHash, successorColliderComposite.mapHash, "ruleset selection does not alter derived mapHash semantics");
+assert.notDeepEqual(successorGridComposite.scoreIdentityHash, successorColliderComposite.scoreIdentityHash, "composite score identity remains ruleset-bound");
+assert.equal(canonical(successorGridComposite.chart.beats), canonical(successorColliderComposite.chart.beats), "same modifiers produce identical derived authored-event bytes");
+assert.deepEqual([successorGridComposite.rulesetId, successorGridComposite.provenance.baseVariantId], ["flow_grid_v2", successorFlowVariants[0].variantId]);
+assert.deepEqual([successorColliderComposite.rulesetId, successorColliderComposite.provenance.baseVariantId], ["flow_colliders_v1", successorFlowVariants[1].variantId]);
 for (const rulesetVariants of [undefined, ["flow_grid_v2"], ["flow_colliders_v1"], ["flow_colliders_v1", "flow_grid_v2"], ["flow_grid_v2", "flow_colliders_v1", "flow_colliders_v1"]]) {
   const tampered = structuredClone(successorFixture.package);
   const chart = tampered.charts.find((entry) => entry.mode === "flow");
@@ -113,6 +129,8 @@ await assert.rejects(() => validateRuntimePackage(longStringPackage), hasCode("s
 const legacyBase = legacyValidation.variants.find((entry) => entry.mode === "boxing");
 assert.ok(legacyBase);
 const legacyComposite = await composeRuntimeVariant(legacyBase, ["no_squats"], basePackage.packageId);
+const legacyCompositeId = `${legacyBase.chartId}~mods-${hashJson({ baseChartId: legacyBase.chartId, modifiers: ["no_squats"] }).slice(0, 12)}`;
+assert.deepEqual([legacyComposite.variantId, legacyComposite.chartId], [legacyCompositeId, legacyCompositeId], "Boxing composite public identities retain the pre-Flow-Colliders formula");
 assert.equal(Object.hasOwn(legacyComposite.chart.prototype, "converterProfile"), false);
 assert.equal(legacyComposite.chart.prototype.contentHash, `sha256:${hashJson({ beats: legacyComposite.chart.beats, recipeId: legacyComposite.recipeId, rulesetId: legacyComposite.rulesetId, sourceHash: legacyComposite.chart.prototype.sourceHash })}`);
 const profilePackage = await makePackage(audioHash, canonicalConverterProfile);
@@ -156,6 +174,21 @@ const colliderResolvedEvents = runtime.getSnapshot().resolvedEvents;
 assert.deepEqual(colliderResolvedEvents.map((event) => event.authoredBeat), gridResolvedEvents.map((event) => event.authoredBeat), "both Flow variants resolve the same exact authored event objects");
 assert.equal(colliderResolvedEvents.every((event, index) => event.authoredBeat === gridResolvedEvents[index].authoredBeat), true, "shared Flow bytes retain object identity across ruleset resolution");
 assert.equal(colliderResolvedEvents.every((event) => event.variantId === runtimeFlowVariants[1].variantId && event.chartId === runtimeFlowVariants[1].chartId), true);
+await runtime.selectVariant(runtimeFlowVariants[0].variantId, { modifierIds: ["no_obstacles"] });
+const gridCompositeSnapshot = runtime.getSnapshot();
+await runtime.selectVariant(runtimeFlowVariants[1].variantId, { modifierIds: ["no_obstacles"] });
+const colliderCompositeSnapshot = runtime.getSnapshot();
+assert.notEqual(gridCompositeSnapshot.selectedVariant.variantId, colliderCompositeSnapshot.selectedVariant.variantId, "runtime cache publishes distinct same-modifier Flow selections");
+assert.equal(gridCompositeSnapshot.selectedVariant.chartId, colliderCompositeSnapshot.selectedVariant.chartId, "same modified Flow map retains shared composite chart identity");
+assert.deepEqual(gridCompositeSnapshot.selectedVariant.mapHash, colliderCompositeSnapshot.selectedVariant.mapHash);
+assert.notDeepEqual(gridCompositeSnapshot.selectedVariant.scoreIdentityHash, colliderCompositeSnapshot.selectedVariant.scoreIdentityHash);
+assert.deepEqual(gridCompositeSnapshot.resolvedEvents.map((event) => event.authoredBeat), colliderCompositeSnapshot.resolvedEvents.map((event) => event.authoredBeat), "same modifiers resolve identical Flow authored-event projections");
+assert.equal(gridCompositeSnapshot.resolvedEvents.every((event) => event.variantId === gridCompositeSnapshot.selectedVariant.variantId && event.chartId === gridCompositeSnapshot.selectedVariant.chartId), true);
+assert.equal(colliderCompositeSnapshot.resolvedEvents.every((event) => event.variantId === colliderCompositeSnapshot.selectedVariant.variantId && event.chartId === colliderCompositeSnapshot.selectedVariant.chartId), true);
+assert.deepEqual([gridCompositeSnapshot.selectedVariant.rulesetId, gridCompositeSnapshot.selectedVariant.provenance.baseVariantId], ["flow_grid_v2", runtimeFlowVariants[0].variantId]);
+assert.deepEqual([colliderCompositeSnapshot.selectedVariant.rulesetId, colliderCompositeSnapshot.selectedVariant.provenance.baseVariantId], ["flow_colliders_v1", runtimeFlowVariants[1].variantId]);
+await runtime.selectVariant(runtimeFlowVariants[0].variantId, { modifierIds: ["no_obstacles"] });
+assert.equal(runtime.getSnapshot().selectedVariant.variantId, gridCompositeSnapshot.selectedVariant.variantId, "alternating selection reuses the deterministic Grid cache entry without cross-ruleset ambiguity");
 await runtime.selectVariant(runtimeFlowVariants[0].variantId);
 snapshot = runtime.getSnapshot();
 const publicSuccessorJson = JSON.stringify(snapshot);

@@ -192,8 +192,11 @@ export async function composeRuntimeVariant(base, requestedModifiers, packageId)
     }
   }
   chartCopy.beats = beats;
-  const suffixSeed = await sha256Hex(canonicalJson({ baseChartId: base.chartId, modifiers }));
-  const chartId = `${base.chartId}~mods-${suffixSeed.slice(0, 12)}`;
+  const chartSuffixSeed = await sha256Hex(canonicalJson({ baseChartId: base.chartId, modifiers }));
+  const chartId = `${base.chartId}~mods-${chartSuffixSeed.slice(0, 12)}`;
+  const variantId = base.mode === "flow"
+    ? `${base.variantId}~mods-${(await sha256Hex(canonicalJson({ baseVariantId: base.variantId, rulesetId: base.rulesetId, modifiers }))).slice(0, 12)}`
+    : chartId;
   chartCopy.chartId = chartId;
   if (base.mode === "boxing") {
     const prototype = /** @type {Record<string, unknown>} */ (cloneMutable(requireRecord(chartCopy.prototype, "prototype_invalid")));
@@ -210,7 +213,7 @@ export async function composeRuntimeVariant(base, requestedModifiers, packageId)
   const scoringMapHashValue = base.mode === "flow" ? await sha256Hex(canonicalJson(flowScoringProjection(frozenChart))) : mapHashValue;
   const scoreValue = await sha256Hex(canonicalJson({ packageId, chartId, rulesetId: base.rulesetId, recipeId: base.recipeId, modifiers, mapHashValue: scoringMapHashValue, ranked: false }));
   return Object.freeze({
-    variantId: chartId,
+    variantId,
     chartId,
     mode: base.mode,
     rulesetId: base.rulesetId,

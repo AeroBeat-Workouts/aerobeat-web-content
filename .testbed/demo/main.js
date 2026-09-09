@@ -102,6 +102,22 @@ class AeroContentRuntimeElement extends HTMLElement {
     const sharedFlowEventObjects = colliderEvents.every((event,index) => event.authoredBeat === gridEvents[index].authoredBeat);
     const distinctFlowScoreIdentities = flowVariants[0].scoreIdentityHash.value !== flowVariants[1].scoreIdentityHash.value;
     const collidersPolicy = [flowVariants[1].recipeId, flowVariants[1].ranked, flowVariants[1].localOnly];
+    await second.selectVariant(flowVariants[0].variantId,{modifierIds:["no_obstacles"]});
+    const gridCompositeSnapshot=second.getSnapshot();
+    await second.selectVariant(flowVariants[1].variantId,{modifierIds:["no_obstacles"]});
+    const colliderCompositeSnapshot=second.getSnapshot();
+    const flowCompositeEvidence={
+      distinctVariantIds:gridCompositeSnapshot.selectedVariant.variantId!==colliderCompositeSnapshot.selectedVariant.variantId,
+      sharedChartId:gridCompositeSnapshot.selectedVariant.chartId===colliderCompositeSnapshot.selectedVariant.chartId,
+      sharedMapHash:gridCompositeSnapshot.selectedVariant.mapHash.value===colliderCompositeSnapshot.selectedVariant.mapHash.value,
+      distinctScoreHash:gridCompositeSnapshot.selectedVariant.scoreIdentityHash.value!==colliderCompositeSnapshot.selectedVariant.scoreIdentityHash.value,
+      identicalAuthoredEvents:canonical(gridCompositeSnapshot.resolvedEvents.map((event)=>event.authoredBeat))===canonical(colliderCompositeSnapshot.resolvedEvents.map((event)=>event.authoredBeat)),
+      rulesets:[gridCompositeSnapshot.selectedVariant.rulesetId,colliderCompositeSnapshot.selectedVariant.rulesetId],
+      bases:[gridCompositeSnapshot.selectedVariant.provenance.baseVariantId,colliderCompositeSnapshot.selectedVariant.provenance.baseVariantId],
+      envelopeAgreement:[gridCompositeSnapshot,colliderCompositeSnapshot].every((entry)=>entry.resolvedEvents.every((event)=>event.variantId===entry.selectedVariant.variantId&&event.chartId===entry.selectedVariant.chartId))
+    };
+    await second.selectVariant(flowVariants[0].variantId,{modifierIds:["no_obstacles"]});
+    flowCompositeEvidence.gridCacheStable=second.getSnapshot().selectedVariant.variantId===gridCompositeSnapshot.selectedVariant.variantId;
     const successorPublicJson = JSON.stringify(second.getSnapshot());
     const publicHasCollisionLeak = ["colliderRadius","collisionSettings","wrist","nose","trajectory","segmentEndpoint","confidence","calibrationId","frameId","contactEpisode"].some((token)=>successorPublicJson.includes(token));
     await second.selectVariant(flowVariants[0].variantId);
@@ -135,6 +151,7 @@ class AeroContentRuntimeElement extends HTMLElement {
       sharedFlowEventObjects,
       distinctFlowScoreIdentities,
       collidersPolicy,
+      flowCompositeEvidence,
       publicHasCollisionLeak,
       boxingVariantEvidence,
       publicHasPaletteLeak: JSON.stringify(snapshot).includes("#FF0000") || JSON.stringify(snapshot).includes(notePalette.paletteHash) || Object.hasOwn(note, "appearanceColor") || boxingPublic.some((event)=>Object.hasOwn(event,"appearanceColor")),
