@@ -33,10 +33,12 @@ export async function validateRuntimePackage(packageValue, options = {}) {
   if ([1,2,3,4].some((version)=>packageRecord.schemaId===`aerobeat.song-package.v${version}`&&packageRecord.schemaVersion===version)) throw dataError("spawn_timing_reimport_required", "Prior package versions require reimport for hash-bound source spawn timing");
   if (packageRecord.schemaId === "aerobeat.song-package.v5" && packageRecord.schemaVersion === 5 && packageRecord.packageVersion === "5.0.0") throw dataError("flow_colliders_reimport_required", "Package predates explicit flow_colliders_v1 authoring and must be reimported");
   if (packageRecord.schemaId !== "aerobeat.song-package.v6" || packageRecord.schemaVersion !== 6 || packageRecord.packageVersion !== "6.0.0") throw dataError("package_schema_invalid", "Song package schema/version is unsupported");
+  if (!hasExactDataKeys(packageRecord, ["schemaId", "schemaVersion", "packageVersion", "packageId", "songId", "songName", "source", "notePalette", "song", "charts", "sets", "recipeDefinitions", "rulesetDefinitions", "conversionTrace", "presentationSuggestion"])) throw dataError("package_shape_invalid", "Successor package must contain only exact authored fields");
   const packageId = requireString(packageRecord.packageId, "package_identity_invalid");
   const songId = requireString(packageRecord.songId, "package_identity_invalid");
   const song = requireRecord(packageRecord.song, "song_invalid");
   if (["notePalette", "paletteHash", "appearanceColor", "provenance"].some((key) => Object.hasOwn(song, key))) throw dataError("song_palette_forbidden", "Public song metadata cannot carry private palette fields");
+  if (!hasExactOptionalDataKeys(song, ["schemaId", "schemaVersion", "recordVersion", "songId", "songName", "durationSec", "timing"], ["audio"])) throw dataError("song_invalid", "Song metadata must contain only exact authored fields");
   if (song.songId !== songId) throw dataError("song_identity_mismatch", "Package and song identities do not match");
   const packageSource = validateSource(packageRecord.source);
   const converterProfile = await validatePackageConverterProfile(packageRecord);
@@ -73,7 +75,7 @@ export async function validateRuntimePackage(packageValue, options = {}) {
     if (chart.mode === "flow") {
       flowCount += 1;
       if (chart.schemaId !== "aerobeat.chart.flow.v5" || chart.schemaVersion !== 5 || chart.rulesetId !== FLOW_GRID_RULESET_ID || !hasExactFlowRulesetVariants(chart.rulesetVariants)) throw dataError("flow_chart_schema_invalid", "Flow chart must bind the exact ordered Flow Grid and Flow Colliders successor identity");
-      for (const key of ["variants", "variantBeats", "beatsByRuleset", "rulesetBeats"]) if (Object.hasOwn(chart, key)) throw dataError("flow_variant_beats_forbidden", "Flow chart must author one shared beats array only");
+      if (!hasExactDataKeys(chart, ["schemaId", "schemaVersion", "recordVersion", "rulesetId", "rulesetVariants", "chartId", "chartName", "mode", "difficulty", "notePalette", "contentHash", "beats"])) throw dataError("flow_chart_shape_invalid", "Flow chart must contain only the exact successor fields and one shared beats array");
       validateFlowPaletteReference(chart.notePalette, notePalette);
       const expectedFlowContentHash = `sha256:${await sha256Hex(canonicalJson({ beats, rulesetId: chart.rulesetId, rulesetVariants: chart.rulesetVariants, notePalette: chart.notePalette }))}`;
       if (requireHashString(chart.contentHash, "flow_content_hash_invalid") !== expectedFlowContentHash) throw dataError("flow_content_hash_mismatch", `Flow chart ${chartId} failed successor content-hash verification`);
@@ -135,6 +137,7 @@ export async function validateRuntimePackage(packageValue, options = {}) {
   const expectedMatrix = conversionRecipeIds.flatMap((recipe) => ["boxing_semantic_track_v1", "boxing_spatial_grid_v1"].map((ruleset) => `${recipe}|${ruleset}`));
   if (!expectedMatrix.every((identity) => matrix.has(identity))) throw dataError("boxing_matrix_incomplete", "Package does not contain all four Boxing prototype variants");
   validateSets(packageRecord.sets, chartIds);
+  rejectPrivateEvidence(packageRecord);
   const packageHashValue = await sha256Hex(canonicalJson(packageRecord));
   const expectedPackageHash = normalizeDeclaredHash(options.declaredPackageHash);
   if (expectedPackageHash && expectedPackageHash !== packageHashValue) throw dataError("package_hash_mismatch", "Song package failed declared hash verification");
@@ -304,6 +307,7 @@ function chartHashProjection(beats, recipeId, rulesetId, sourceHash, converterPr
 function validateSource(sourceValue) {
   const source = requireRecord(sourceValue, "source_provenance_invalid");
   if (["notePalette", "paletteHash", "appearanceColor"].some((key) => Object.hasOwn(source, key))) throw dataError("source_palette_forbidden", "Package source cannot carry runtime palette fields");
+  if (!hasExactOptionalDataKeys(source, ["provider", "sourceId", "sourceVersionHash", "difficulty", "sourceInfoFormat", "sourceInfoVersion", "sourceInfoHash", "sourceDifficultyPath", "sourceBeatmapFormat", "sourceBeatmapVersion", "sourceDifficultyHash", "sourceHash", "spawnTiming", "obstacleContract"], ["converterProfile"])) throw dataError("source_provenance_invalid", "Package source must contain only exact authored provenance fields");
   for (const key of ["provider", "sourceId", "sourceVersionHash", "difficulty", "sourceDifficultyPath"]) requireString(source[key], "source_provenance_invalid");
   for (const key of ["sourceHash", "sourceInfoHash", "sourceDifficultyHash"]) requireHashString(source[key], "source_hash_invalid");
   if (source.sourceInfoFormat !== "v2" && source.sourceInfoFormat !== "v4") throw dataError("source_format_provenance_invalid", "Source Info format must be v2 or v4");
@@ -338,6 +342,7 @@ function validateEvents(beats, boxing, beatToTimelineMs) {
     const beat = requireRecord(beats[index], "event_invalid");
     if (["appearanceColor", "notePalette", "paletteHash"].some((key) => Object.hasOwn(beat, key))) throw dataError(boxing ? "boxing_palette_forbidden" : "authored_appearance_forbidden", `Event ${index} cannot carry runtime palette appearance fields`);
     if (!Number.isFinite(beat.start) || Number(beat.start) < 0 || typeof beat.type !== "string" || beat.type.length === 0) throw dataError("event_shape_invalid", `Event ${index} is invalid`);
+    if (!boxing) validateFlowEvent(beat, index);
     requireBoundedEventTimestamp(beat.start, beatToTimelineMs, index, "start");
     if (Object.hasOwn(beat, "end") && (!Number.isFinite(beat.end) || Number(beat.end) < Number(beat.start))) throw dataError("event_interval_invalid", `Event ${index} interval is invalid`);
     if (Object.hasOwn(beat, "end")) requireBoundedEventTimestamp(beat.end, beatToTimelineMs, index, "end");
@@ -364,6 +369,35 @@ function validateEvents(beats, boxing, beatToTimelineMs) {
       if (checkpoint.kind !== "instantaneous" || canonicalJson(checkpoint.noseSafeCells) !== canonicalJson(expectedSafeCells)) throw dataError("boxing_obstacle_invalid", `Event ${index} checkpoint must retain the exact instantaneous normalized safe-cell complement`);
     }
   }
+}
+
+/** @param {DataRecord} beat @param {number} index */
+function validateFlowEvent(beat, index) {
+  const invalid = () => dataError("flow_event_shape_invalid", `Flow event ${index} must match its exact authored ${String(beat.type)} schema`);
+  if (beat.type === "note") {
+    const keys = beat.requiresDirection === true
+      ? ["start", "type", "hand", "placement", "requiresDirection", "angleOffset", "direction"]
+      : ["start", "type", "hand", "placement", "requiresDirection", "angleOffset"];
+    if (!hasExactDataKeys(beat, keys) || (beat.hand !== "left" && beat.hand !== "right") || !integerInRange(beat.placement, 0, 11) || typeof beat.requiresDirection !== "boolean" || !Number.isFinite(beat.angleOffset) || (beat.requiresDirection === true && !integerInRange(beat.direction, 0, 7))) throw invalid();
+    return;
+  }
+  if (beat.type === "bomb") {
+    if (!hasExactDataKeys(beat, ["start", "type", "placement"]) || !integerInRange(beat.placement, 0, 11)) throw invalid();
+    return;
+  }
+  if (beat.type === "obstacle") {
+    if (!hasExactDataKeys(beat, ["start", "end", "type", "sourceGeometry", "gameplayGeometry", "gridMask"])) throw invalid();
+    return;
+  }
+  if (beat.type === "arc") {
+    if (!hasExactOptionalDataKeys(beat, ["start", "end", "type", "hand", "startPlacement", "endPlacement", "startDirection", "endDirection", "headCurveMultiplier", "tailCurveMultiplier", "midAnchorMode"], ["startNoteRef", "endNoteRef"]) || (beat.hand !== "left" && beat.hand !== "right") || !integerInRange(beat.startPlacement, 0, 11) || !integerInRange(beat.endPlacement, 0, 11) || !integerInRange(beat.startDirection, 0, 8) || !integerInRange(beat.endDirection, 0, 8) || !Number.isFinite(beat.headCurveMultiplier) || !Number.isFinite(beat.tailCurveMultiplier) || !Number.isInteger(beat.midAnchorMode) || (Object.hasOwn(beat, "startNoteRef") && !boundedNonEmptyString(beat.startNoteRef, 512)) || (Object.hasOwn(beat, "endNoteRef") && !boundedNonEmptyString(beat.endNoteRef, 512))) throw invalid();
+    return;
+  }
+  if (beat.type === "burst") {
+    if (!hasExactOptionalDataKeys(beat, ["start", "end", "type", "hand", "placement", "direction", "tailPlacement", "checkpointCount"], ["spacingBias"]) || (beat.hand !== "left" && beat.hand !== "right") || !integerInRange(beat.placement, 0, 11) || !integerInRange(beat.tailPlacement, 0, 11) || !integerInRange(beat.direction, 0, 8) || !Number.isInteger(beat.checkpointCount) || Number(beat.checkpointCount) < 1 || (Object.hasOwn(beat, "spacingBias") && !Number.isFinite(beat.spacingBias))) throw invalid();
+    return;
+  }
+  throw invalid();
 }
 
 /** @param {readonly number[]} cells */
@@ -446,6 +480,7 @@ function validateFlowTraceBinding(traceValue, palette, flowContentHash, source) 
   const flowTraces = requireArray(trace.flow, "flow_trace_invalid");
   if (flowTraces.length !== 1) throw dataError("flow_trace_invalid", "Package must carry exactly one Flow conversion trace");
   const flowTrace = requireRecord(flowTraces[0], "flow_trace_invalid");
+  if (!hasExactDataKeys(flowTrace, ["difficulty", "events", "obstacleContract", "sourceHash", "sourceInfoFormat", "sourceInfoVersion", "sourceInfoHash", "sourceDifficultyPath", "sourceBeatmapFormat", "sourceBeatmapVersion", "sourceDifficultyHash", "spawnTiming", "rulesetId", "rulesetVariants", "notePalette", "contentHash"])) throw dataError("flow_trace_invalid", "Flow conversion trace must contain only exact authored successor fields");
   try { validateFlowPaletteReference(flowTrace.notePalette, palette); }
   catch { throw dataError("flow_trace_invalid", "Flow conversion trace must bind the package note palette reference"); }
   if (flowTrace.rulesetId !== FLOW_GRID_RULESET_ID || !hasExactFlowRulesetVariants(flowTrace.rulesetVariants) || flowTrace.obstacleContract !== "normalized_obstacle_v2") throw dataError("flow_trace_invalid", "Flow conversion trace must bind the exact ordered successor rulesets and obstacle contract");
@@ -515,6 +550,25 @@ function plainRecordForContract(value, code) {
   for (const key of Reflect.ownKeys(record)) Object.defineProperty(result, key, { configurable: true, enumerable: true, writable: true, value: record[key] });
   return result;
 }
+/** @param {unknown} value */
+function rejectPrivateEvidence(value) {
+  if (!value || typeof value !== "object") return;
+  for (const key of Reflect.ownKeys(value)) {
+    if (typeof key !== "string") throw dataError("private_evidence_forbidden", "Private evidence keys must never enter package data");
+    const normalized = key.toLowerCase().replaceAll(/[^a-z0-9]/gu, "");
+    const forbidden = normalized.includes("collision") || normalized.includes("collider") || normalized.startsWith("wrist") || (normalized.startsWith("nose") && normalized !== "nosesafecells") || normalized.includes("landmark") || normalized.includes("trajectory") || normalized.includes("segmentendpoint") || normalized === "distance" || normalized.includes("contactdistance") || normalized.includes("velocityvector") || normalized.startsWith("confidence") || normalized.startsWith("calibration") || normalized === "frameid" || normalized.startsWith("sourcecontact") || normalized.startsWith("contactepisode");
+    if (forbidden) throw dataError("private_evidence_forbidden", `Private collision/body evidence field ${key} is forbidden`);
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (!descriptor || !("value" in descriptor)) throw dataError("private_evidence_forbidden", "Private evidence accessors are forbidden");
+    rejectPrivateEvidence(descriptor.value);
+  }
+}
+/** @param {unknown} value @param {readonly string[]} required @param {readonly string[]} optional */
+function hasExactOptionalDataKeys(value, required, optional) { if (!isPlainDataRecord(value)) return false; const keys = Reflect.ownKeys(value); return required.every((key) => keys.includes(key)) && keys.every((key) => typeof key === "string" && (required.includes(key) || optional.includes(key))); }
+/** @param {unknown} value @param {number} minimum @param {number} maximum */
+function integerInRange(value, minimum, maximum) { return Number.isInteger(value) && Number(value) >= minimum && Number(value) <= maximum; }
+/** @param {unknown} value @param {number} maximum */
+function boundedNonEmptyString(value, maximum) { return typeof value === "string" && value.length > 0 && value.length <= maximum; }
 /** @param {unknown} value @param {string} code @returns {DataRecord} */
 function requireRecord(value, code) { if (!isPlainDataRecord(value)) throw dataError(code, "Expected a plain content record"); return value; }
 /** @param {unknown} value @param {string} code @returns {readonly unknown[]} */

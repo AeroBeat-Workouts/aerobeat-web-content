@@ -87,7 +87,19 @@ export function cloneFrozenData(value, limits = {}) {
     if (seen.has(current)) throw dataError("data_cycle", "Content data must not contain cycles");
     seen.add(current);
     try {
-      if (Array.isArray(current)) return Object.freeze(current.map((entry) => visit(entry, depth + 1)));
+      if (Array.isArray(current)) {
+        if (Object.getPrototypeOf(current) !== Array.prototype) throw dataError("data_array_invalid", "Content arrays must use the ordinary Array prototype");
+        const keys = Reflect.ownKeys(current);
+        const lengthDescriptor = Object.getOwnPropertyDescriptor(current, "length");
+        if (!lengthDescriptor || !("value" in lengthDescriptor) || lengthDescriptor.enumerable || keys.length !== current.length + 1) throw dataError("data_array_invalid", "Content arrays must be dense ordinary data arrays");
+        const result = [];
+        for (let index = 0; index < current.length; index += 1) {
+          const descriptor = Object.getOwnPropertyDescriptor(current, String(index));
+          if (!descriptor || !descriptor.enumerable || !("value" in descriptor)) throw dataError("data_array_invalid", "Content array entries must be enumerable data properties");
+          result.push(visit(descriptor.value, depth + 1));
+        }
+        return Object.freeze(result);
+      }
       if (!isPlainDataRecord(current)) throw dataError("data_record_invalid", "Content records must be plain enumerable data");
       const result = Object.create(null);
       for (const key of Reflect.ownKeys(current)) {

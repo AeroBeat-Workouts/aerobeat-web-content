@@ -60,7 +60,9 @@ async function verifyContext(origin, secure) {
     const evidence = await page.evaluate(() => globalThis.__contentHashEvidence);
     assert.equal(evidence.isSecureContext, secure);
     assert.equal(evidence.subtleType, secure ? "object" : "undefined");
-    assert.deepEqual({ package: evidence.packageFailure, staleV5: evidence.staleV5Failure, chart: evidence.chartFailure, asset: evidence.assetFailure }, { package: "package_hash_mismatch", staleV5: "flow_colliders_reimport_required", chart: "chart_hash_mismatch", asset: "asset_hash_mismatch" });
+    assert.deepEqual({ package: evidence.packageFailure, staleV5: evidence.staleV5Failure, evidenceAttack: evidence.evidenceAttackFailure, accessorAttack: evidence.accessorAttackFailure, chart: evidence.chartFailure, asset: evidence.assetFailure }, { package: "package_hash_mismatch", staleV5: "flow_colliders_reimport_required", evidenceAttack: "flow_event_shape_invalid", accessorAttack: "data_record_invalid", chart: "chart_hash_mismatch", asset: "asset_hash_mismatch" });
+    assert.equal(evidence.evidenceAttackPublished, false);
+    assert.equal(evidence.evidenceGetterCalls, 0);
     assert.equal(evidence.persistedState, "ready");
     assert.equal(evidence.persistedAssetMatches, true);
     assert.equal(evidence.largeAssetBytes, 4 * 1024 * 1024);

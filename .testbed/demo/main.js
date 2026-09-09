@@ -26,12 +26,12 @@ class AeroContentRuntimeElement extends HTMLElement {
         charts.push({ schemaId: "aerobeat.chart.boxing.v1", schemaVersion: 1, recordVersion: 1, chartId, chartName: chartId, mode: "boxing", difficulty: "Expert", prototype: { contractId: "aerobeat.boxing.prototype.v1", recipeId, recipeVersion: "1", rulesetId, rulesetVersion: "1", sourceHash, recipeHash: `sha256:${"1".repeat(64)}`, rulesetHash: `sha256:${"2".repeat(64)}`, contentHash: `sha256:${contentHash}`, modifiers: [], converterProfile, regenerationRequiredFor: [] }, beats: boxingBeats });
       }
     }
-    const flowBeats = [{ start: 1, type: "note", hand: "left", placement: 4, direction: 1, requiresDirection: true }, { start: 2, end: 2.5, type: "obstacle", sourceGeometry:{schema:"aerobeat/obstacle_source_geometry",version:1,coordinateSpace:"beatsaber_v2_legacy_obstacle",kind:"v2_type_1",x:1,y:2,width:1,height:3},gameplayGeometry:{schema:"aerobeat/obstacle_gameplay_geometry",version:1,coordinateSpace:"aerobeat_top_left_grid",x:1,y:0,width:1,height:3},gridMask:[1,5,9] }, { start: 3, type: "bomb", placement: 6 }];
+    const flowBeats = [{ start: 1, type: "note", hand: "left", placement: 4, requiresDirection: true, angleOffset: 0, direction: 1 }, { start: 2, end: 2.5, type: "obstacle", sourceGeometry:{schema:"aerobeat/obstacle_source_geometry",version:1,coordinateSpace:"beatsaber_v2_legacy_obstacle",kind:"v2_type_1",x:1,y:2,width:1,height:3},gameplayGeometry:{schema:"aerobeat/obstacle_gameplay_geometry",version:1,coordinateSpace:"aerobeat_top_left_grid",x:1,y:0,width:1,height:3},gridMask:[1,5,9] }, { start: 3, type: "bomb", placement: 6 }];
     const flowPalette = { source: "package", paletteHash: notePalette.paletteHash };
     const rulesetVariants = ["flow_grid_v2", "flow_colliders_v1"];
     const flowContentHash = `sha256:${await sha256(new TextEncoder().encode(canonical({ beats: flowBeats, rulesetId: "flow_grid_v2", rulesetVariants, notePalette: flowPalette })))}`;
     charts.push({ schemaId: "aerobeat.chart.flow.v5", schemaVersion: 5, recordVersion: 2, rulesetId: "flow_grid_v2", rulesetVariants, chartId: "browser-flow", chartName: "Browser Flow", mode: "flow", difficulty: "Expert", notePalette: flowPalette, contentHash: flowContentHash, beats: flowBeats });
-    const packageRecord = { schemaId: "aerobeat.song-package.v6", schemaVersion: 6, packageVersion: "6.0.0", packageId: "browser-package", songId: "browser-song", songName: "Browser Runtime", notePalette, source: { provider: "fixture", sourceId: "browser", sourceVersionHash: "version", difficulty: "Expert", sourceInfoFormat: "v4", sourceInfoVersion: "4.0.1", sourceInfoHash: `sha256:${"3".repeat(64)}`, sourceDifficultyPath: "Expert.dat", sourceBeatmapFormat: "v4", sourceBeatmapVersion: "4.1.0", sourceDifficultyHash: `sha256:${"4".repeat(64)}`, sourceHash, spawnTiming, obstacleContract: "normalized_obstacle_v2", converterProfile }, song: { schemaId: "aerobeat.song.v1", schemaVersion: 1, recordVersion: 1, songId: "browser-song", songName: "Browser Runtime", durationSec: 2, audio: { filePath: "song.ogg", contentHash: `sha256:${audioHash}` }, timing: { anchorMs: 100, tempoSegments: [{ startBeat: 0, bpm: 120 }, { startBeat: 2, bpm: 60 }], stopSegments: [{ startBeat: 1, durationMs: 100 }], timeSignatureSegments: [{ startBeat: 0, numerator: 4, denominator: 4 }] } }, charts, sets: charts.map((chart, index) => ({ schemaId: "aerobeat.set.v1", schemaVersion: 1, recordVersion: 1, setId: `browser-set-${index}`, setName: chart.chartName, songId: "browser-song", chartId: chart.chartId })), recipeDefinitions: [], rulesetDefinitions: [], conversionTrace: { notePalette: flowPalette, spawnTiming, converterProfile, boxing: charts.filter((chart) => chart.mode === "boxing").map((chart) => ({ chartId: chart.chartId, spawnTiming, converterProfile })), flow:[{ obstacleContract:"normalized_obstacle_v2", rulesetId:"flow_grid_v2", rulesetVariants, sourceHash, sourceInfoFormat:"v4", sourceInfoVersion:"4.0.1", sourceInfoHash:`sha256:${"3".repeat(64)}`, sourceDifficultyPath:"Expert.dat", sourceBeatmapFormat:"v4", sourceBeatmapVersion:"4.1.0", sourceDifficultyHash:`sha256:${"4".repeat(64)}`, spawnTiming, notePalette:flowPalette, contentHash:flowContentHash }] }, presentationSuggestion: null };
+    const packageRecord = { schemaId: "aerobeat.song-package.v6", schemaVersion: 6, packageVersion: "6.0.0", packageId: "browser-package", songId: "browser-song", songName: "Browser Runtime", notePalette, source: { provider: "fixture", sourceId: "browser", sourceVersionHash: "version", difficulty: "Expert", sourceInfoFormat: "v4", sourceInfoVersion: "4.0.1", sourceInfoHash: `sha256:${"3".repeat(64)}`, sourceDifficultyPath: "Expert.dat", sourceBeatmapFormat: "v4", sourceBeatmapVersion: "4.1.0", sourceDifficultyHash: `sha256:${"4".repeat(64)}`, sourceHash, spawnTiming, obstacleContract: "normalized_obstacle_v2", converterProfile }, song: { schemaId: "aerobeat.song.v1", schemaVersion: 1, recordVersion: 1, songId: "browser-song", songName: "Browser Runtime", durationSec: 2, audio: { filePath: "song.ogg", contentHash: `sha256:${audioHash}` }, timing: { anchorMs: 100, tempoSegments: [{ startBeat: 0, bpm: 120 }, { startBeat: 2, bpm: 60 }], stopSegments: [{ startBeat: 1, durationMs: 100 }], timeSignatureSegments: [{ startBeat: 0, numerator: 4, denominator: 4 }] } }, charts, sets: charts.map((chart, index) => ({ schemaId: "aerobeat.set.v1", schemaVersion: 1, recordVersion: 1, setId: `browser-set-${index}`, setName: chart.chartName, songId: "browser-song", chartId: chart.chartId })), recipeDefinitions: [], rulesetDefinitions: [], conversionTrace: { notePalette: flowPalette, spawnTiming, converterProfile, boxing: charts.filter((chart) => chart.mode === "boxing").map((chart) => ({ chartId: chart.chartId, spawnTiming, converterProfile })), flow:[{ difficulty:"Expert", events:[], obstacleContract:"normalized_obstacle_v2", rulesetId:"flow_grid_v2", rulesetVariants, sourceHash, sourceInfoFormat:"v4", sourceInfoVersion:"4.0.1", sourceInfoHash:`sha256:${"3".repeat(64)}`, sourceDifficultyPath:"Expert.dat", sourceBeatmapFormat:"v4", sourceBeatmapVersion:"4.1.0", sourceDifficultyHash:`sha256:${"4".repeat(64)}`, spawnTiming, notePalette:flowPalette, contentHash:flowContentHash }] }, presentationSuggestion: null };
     const packageHash = await sha256(new TextEncoder().encode(canonical(packageRecord)));
     const paddedAudio = new Uint8Array(audio.byteLength + 11);
     paddedAudio.set(audio, 7);
@@ -67,6 +67,21 @@ class AeroContentRuntimeElement extends HTMLElement {
     const packageFailure = await failureCode(createAeroContentRuntime().loadPackage({ package: packageRecord, packageHash: `sha256:${"0".repeat(64)}`, assets: [{ path: "song.ogg", bytes: audioView }] }));
     const staleV5 = structuredClone(packageRecord); staleV5.schemaId = "aerobeat.song-package.v5"; staleV5.schemaVersion = 5; staleV5.packageVersion = "5.0.0";
     const staleV5Failure = await failureCode(createAeroContentRuntime().loadPackage({ package: staleV5, assets: [{ path: "song.ogg", bytes: audioView }] }));
+    const evidenceAttack = structuredClone(packageRecord);
+    const evidenceFlow = evidenceAttack.charts.find((chart)=>chart.mode==="flow");
+    evidenceFlow.beats[0].collisionSettings = { colliderRadius: 0.25 };
+    evidenceFlow.beats[0].colliderRadius = 0.5;
+    evidenceFlow.beats[0].wristEvidence = { x: 0.5, y: 0.5 };
+    evidenceFlow.beats[0].frameId = "private-frame";
+    evidenceFlow.contentHash = `sha256:${await sha256(new TextEncoder().encode(canonical({beats:evidenceFlow.beats,rulesetId:evidenceFlow.rulesetId,rulesetVariants:evidenceFlow.rulesetVariants,notePalette:evidenceFlow.notePalette})))}`;
+    evidenceAttack.conversionTrace.flow[0].contentHash = evidenceFlow.contentHash;
+    const evidenceAttackHash = await sha256(new TextEncoder().encode(canonical(evidenceAttack)));
+    const evidenceAttackRuntime = createAeroContentRuntime();
+    const evidenceAttackFailure = await failureCode(evidenceAttackRuntime.loadPackage({ package:evidenceAttack, packageHash:`sha256:${evidenceAttackHash}`, assets:[{path:"song.ogg",bytes:audioView}] }));
+    const evidenceAttackPublished = JSON.stringify(evidenceAttackRuntime.getSnapshot()).includes("private-frame");
+    let evidenceGetterCalls = 0;
+    const accessorAttack = structuredClone(packageRecord); Object.defineProperty(accessorAttack.charts.find((chart)=>chart.mode==="flow").beats[0],"wristEvidence",{enumerable:true,get(){evidenceGetterCalls+=1;return{x:0.5};}});
+    const accessorAttackFailure = await failureCode(createAeroContentRuntime().loadPackage({package:accessorAttack,assets:[{path:"song.ogg",bytes:audioView}]}));
     const chartTamper = structuredClone(packageRecord);
     chartTamper.charts[0].prototype.contentHash = `sha256:${"0".repeat(64)}`;
     const chartFailure = await failureCode(createAeroContentRuntime().loadPackage({ package: chartTamper, assets: [{ path: "song.ogg", bytes: audioView }] }));
@@ -102,6 +117,10 @@ class AeroContentRuntimeElement extends HTMLElement {
       identities: Object.freeze({ packageHash, audioHash, largeHash }),
       packageFailure,
       staleV5Failure,
+      evidenceAttackFailure,
+      evidenceAttackPublished,
+      accessorAttackFailure,
+      evidenceGetterCalls,
       chartFailure,
       assetFailure,
       persistedState: persistence.getSnapshot().state,
