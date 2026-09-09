@@ -13,6 +13,10 @@ import {
 import { canonicalJson, cloneFrozenData, dataError, hasExactDataKeys, isPlainDataRecord, runtimePackageDataLimits, sha256Hex } from "./runtime-data.js";
 import { validateSpawnTiming } from "./spawn-timing.js";
 
+const FLOW_GRID_RULESET_ID = "flow_grid_v2";
+const FLOW_COLLIDERS_RULESET_ID = "flow_colliders_v1";
+const FLOW_RULESET_VARIANTS = Object.freeze([FLOW_GRID_RULESET_ID, FLOW_COLLIDERS_RULESET_ID]);
+
 /** @typedef {Readonly<Record<string, unknown>>} DataRecord */
 /** @typedef {import("@aerobeat/web-contracts").AeroEffectiveNotePalette} AeroEffectiveNotePalette */
 /** @typedef {Readonly<{variantId: string, chartId: string, mode: "flow" | "boxing", rulesetId: string, recipeId: string | null, modifierIds: readonly string[], ranked: boolean, localOnly: boolean, mapHash: Readonly<Record<string, unknown>>, scoreIdentityHash: Readonly<Record<string, unknown>>, provenance: Readonly<Record<string, unknown>>, chart: DataRecord}>} RuntimeVariant */
@@ -27,7 +31,8 @@ export async function validateRuntimePackage(packageValue, options = {}) {
   const packageRecord = /** @type {DataRecord} */ (cloneFrozenData(packageValue, runtimePackageDataLimits));
   requireString(packageRecord.schemaId, "package_schema_invalid");
   if ([1,2,3,4].some((version)=>packageRecord.schemaId===`aerobeat.song-package.v${version}`&&packageRecord.schemaVersion===version)) throw dataError("spawn_timing_reimport_required", "Prior package versions require reimport for hash-bound source spawn timing");
-  if (packageRecord.schemaId !== "aerobeat.song-package.v5" || packageRecord.schemaVersion !== 5 || packageRecord.packageVersion !== "5.0.0") throw dataError("package_schema_invalid", "Song package schema/version is unsupported");
+  if (packageRecord.schemaId === "aerobeat.song-package.v5" && packageRecord.schemaVersion === 5 && packageRecord.packageVersion === "5.0.0") throw dataError("flow_colliders_reimport_required", "Package predates explicit flow_colliders_v1 authoring and must be reimported");
+  if (packageRecord.schemaId !== "aerobeat.song-package.v6" || packageRecord.schemaVersion !== 6 || packageRecord.packageVersion !== "6.0.0") throw dataError("package_schema_invalid", "Song package schema/version is unsupported");
   const packageId = requireString(packageRecord.packageId, "package_identity_invalid");
   const songId = requireString(packageRecord.songId, "package_identity_invalid");
   const song = requireRecord(packageRecord.song, "song_invalid");
@@ -63,15 +68,22 @@ export async function validateRuntimePackage(packageValue, options = {}) {
     let modifierIds = [];
     let declaredChartHash = "";
     let scoringChartHash = "";
+    /** @type {readonly Readonly<{rulesetId:string, variantId:string, ranked:boolean, localOnly:boolean}>[]} */
+    let runtimeIdentities = Object.freeze([]);
     if (chart.mode === "flow") {
       flowCount += 1;
-      if (chart.schemaId !== "aerobeat.chart.flow.v4" || chart.schemaVersion !== 4 || chart.rulesetId !== "flow_grid_v2") throw dataError("flow_chart_schema_invalid", "Flow chart must use note-palette-aware normalized obstacle schema/ruleset v4");
+      if (chart.schemaId !== "aerobeat.chart.flow.v5" || chart.schemaVersion !== 5 || chart.rulesetId !== FLOW_GRID_RULESET_ID || !hasExactFlowRulesetVariants(chart.rulesetVariants)) throw dataError("flow_chart_schema_invalid", "Flow chart must bind the exact ordered Flow Grid and Flow Colliders successor identity");
+      for (const key of ["variants", "variantBeats", "beatsByRuleset", "rulesetBeats"]) if (Object.hasOwn(chart, key)) throw dataError("flow_variant_beats_forbidden", "Flow chart must author one shared beats array only");
       validateFlowPaletteReference(chart.notePalette, notePalette);
-      const expectedFlowContentHash = `sha256:${await sha256Hex(canonicalJson({ beats, rulesetId: chart.rulesetId, notePalette: chart.notePalette }))}`;
-      if (requireHashString(chart.contentHash, "flow_content_hash_invalid") !== expectedFlowContentHash) throw dataError("flow_content_hash_mismatch", `Flow chart ${chartId} failed palette-bound content-hash verification`);
+      const expectedFlowContentHash = `sha256:${await sha256Hex(canonicalJson({ beats, rulesetId: chart.rulesetId, rulesetVariants: chart.rulesetVariants, notePalette: chart.notePalette }))}`;
+      if (requireHashString(chart.contentHash, "flow_content_hash_invalid") !== expectedFlowContentHash) throw dataError("flow_content_hash_mismatch", `Flow chart ${chartId} failed successor content-hash verification`);
       flowContentHash = expectedFlowContentHash;
       declaredChartHash = expectedFlowContentHash.slice(7);
       scoringChartHash = await sha256Hex(canonicalJson(flowScoringProjection(chart)));
+      runtimeIdentities = Object.freeze([
+        Object.freeze({ rulesetId: FLOW_GRID_RULESET_ID, variantId: chartId, ranked: true, localOnly: false }),
+        Object.freeze({ rulesetId: FLOW_COLLIDERS_RULESET_ID, variantId: `${chartId}~ruleset-${FLOW_COLLIDERS_RULESET_ID}`, ranked: false, localOnly: true })
+      ]);
     } else if (chart.mode === "boxing") {
       if (Object.hasOwn(chart, "notePalette") || Object.hasOwn(chart, "paletteHash")) throw dataError("boxing_palette_forbidden", "Boxing charts cannot carry Flow note-palette fields");
       const prototype = requireRecord(chart.prototype, "prototype_invalid");
@@ -83,7 +95,7 @@ export async function validateRuntimePackage(packageValue, options = {}) {
       requireHashString(prototype.rulesetHash, "ruleset_hash_invalid");
       rulesetId = requireString(prototype.rulesetId, "ruleset_invalid");
       recipeId = requireString(prototype.recipeId, "recipe_invalid");
-      if (!rulesetIds.includes(/** @type {"flow_grid_v1" | "flow_grid_v2" | "boxing_semantic_track_v1" | "boxing_spatial_grid_v1"} */ (rulesetId)) || rulesetId.startsWith("flow_grid_")) throw dataError("ruleset_invalid", "Boxing ruleset is unsupported");
+      if (!rulesetIds.includes(/** @type {"flow_grid_v1" | "flow_grid_v2" | "flow_colliders_v1" | "boxing_semantic_track_v1" | "boxing_spatial_grid_v1"} */ (rulesetId)) || (rulesetId !== "boxing_semantic_track_v1" && rulesetId !== "boxing_spatial_grid_v1")) throw dataError("ruleset_invalid", "Boxing ruleset is unsupported");
       if (!conversionRecipeIds.includes(/** @type {"row_family_balanced_height_v1" | "cut_family_source_height_v1"} */ (recipeId))) throw dataError("recipe_invalid", "Conversion recipe is unsupported");
       if (options.supportedRulesetIds && !options.supportedRulesetIds.includes(rulesetId)) throw dataError("ruleset_unavailable", `Ruleset ${rulesetId} is unavailable`);
       if (options.supportedRecipeIds && !options.supportedRecipeIds.includes(recipeId)) throw dataError("recipe_unavailable", `Recipe ${recipeId} is unavailable`);
@@ -95,38 +107,43 @@ export async function validateRuntimePackage(packageValue, options = {}) {
       if (actualChartHash !== declaredChartHash) throw dataError("chart_hash_mismatch", `Chart ${chartId} failed content-hash verification`);
       scoringChartHash = declaredChartHash;
       matrix.add(`${recipeId}|${rulesetId}`);
+      runtimeIdentities = Object.freeze([Object.freeze({ rulesetId, variantId: chartId, ranked: true, localOnly: false })]);
     } else {
       throw dataError("chart_mode_invalid", "Only Flow and Boxing charts are supported");
     }
     const mapHash = contentHash(declaredChartHash);
-    const scoreValue = await sha256Hex(canonicalJson({ packageId, chartId, rulesetId, recipeId, modifierIds, mapHash: scoringChartHash, ranked: true }));
-    variants.push(Object.freeze({
-      variantId: chartId,
-      chartId,
-      mode: chart.mode,
-      rulesetId,
-      recipeId,
-      modifierIds: Object.freeze([...modifierIds]),
-      ranked: true,
-      localOnly: false,
-      mapHash,
-      scoreIdentityHash: contentHash(scoreValue),
-      provenance: Object.freeze({ schema: "aerobeat/runtime_variant_provenance", version: 1, kind: "authored", baseVariantId: null, requestedModifierIds: Object.freeze([]), effectiveModifierIds: Object.freeze([...modifierIds]) }),
-      chart
-    }));
+    for (const identity of runtimeIdentities) {
+      const scoreValue = await sha256Hex(canonicalJson({ packageId, chartId, rulesetId: identity.rulesetId, recipeId, modifierIds, mapHash: scoringChartHash, ranked: identity.ranked }));
+      variants.push(Object.freeze({
+        variantId: identity.variantId,
+        chartId,
+        mode: chart.mode,
+        rulesetId: identity.rulesetId,
+        recipeId,
+        modifierIds: Object.freeze([...modifierIds]),
+        ranked: identity.ranked,
+        localOnly: identity.localOnly,
+        mapHash,
+        scoreIdentityHash: contentHash(scoreValue),
+        provenance: Object.freeze({ schema: "aerobeat/runtime_variant_provenance", version: 1, kind: "authored", baseVariantId: null, requestedModifierIds: Object.freeze([]), effectiveModifierIds: Object.freeze([...modifierIds]) }),
+        chart
+      }));
+    }
   }
   if (flowCount !== 1) throw dataError("flow_variant_invalid", "Package must contain exactly one Flow chart");
-  validateFlowTraceBinding(packageRecord.conversionTrace, notePalette, flowContentHash);
+  validateFlowTraceBinding(packageRecord.conversionTrace, notePalette, flowContentHash, packageSource);
   const expectedMatrix = conversionRecipeIds.flatMap((recipe) => ["boxing_semantic_track_v1", "boxing_spatial_grid_v1"].map((ruleset) => `${recipe}|${ruleset}`));
   if (!expectedMatrix.every((identity) => matrix.has(identity))) throw dataError("boxing_matrix_incomplete", "Package does not contain all four Boxing prototype variants");
   validateSets(packageRecord.sets, chartIds);
   const packageHashValue = await sha256Hex(canonicalJson(packageRecord));
   const expectedPackageHash = normalizeDeclaredHash(options.declaredPackageHash);
   if (expectedPackageHash && expectedPackageHash !== packageHashValue) throw dataError("package_hash_mismatch", "Song package failed declared hash verification");
+  const semanticParityHashValue = await semanticParityHash(packageRecord);
   return Object.freeze({
     package: packageRecord,
     packageId,
     packageHash: contentHash(packageHashValue),
+    semanticParityHash: contentHash(semanticParityHashValue),
     song,
     bpm,
     beatToTimelineMs,
@@ -183,7 +200,7 @@ export async function composeRuntimeVariant(base, requestedModifiers, packageId)
     prototype.contentHash = `sha256:${await sha256Hex(canonicalJson(chartHashProjection(beats, base.recipeId, base.rulesetId, requireHashString(prototype.sourceHash, "source_hash_invalid"), converterProfile)))}`;
     chartCopy.prototype = prototype;
   } else {
-    chartCopy.contentHash = `sha256:${await sha256Hex(canonicalJson({ beats, rulesetId: chartCopy.rulesetId, notePalette: chartCopy.notePalette }))}`;
+    chartCopy.contentHash = `sha256:${await sha256Hex(canonicalJson({ beats, rulesetId: chartCopy.rulesetId, rulesetVariants: chartCopy.rulesetVariants, notePalette: chartCopy.notePalette }))}`;
   }
   const frozenChart = /** @type {DataRecord} */ (cloneFrozenData(chartCopy));
   const mapHashValue = base.mode === "flow" ? requireHashString(frozenChart.contentHash, "flow_content_hash_invalid").slice(7) : await sha256Hex(canonicalJson(frozenChart));
@@ -421,8 +438,8 @@ function validateFlowPaletteReference(referenceValue, palette) {
 /** @param {unknown} traceValue @param {Readonly<Record<string, unknown>>} spawnTiming */
 function validateSpawnTimingTrace(traceValue,spawnTiming){const trace=requireRecord(traceValue,"spawn_timing_trace_mismatch");if(canonicalJson(trace.spawnTiming)!==canonicalJson(spawnTiming))throw dataError("spawn_timing_trace_mismatch","Top conversion trace must bind exact source spawn timing");for(const key of ["boxing","flow"]){const values=requireArray(trace[key],"spawn_timing_trace_mismatch");for(const value of values)if(canonicalJson(requireRecord(value,"spawn_timing_trace_mismatch").spawnTiming)!==canonicalJson(spawnTiming))throw dataError("spawn_timing_trace_mismatch","Every conversion trace must bind exact source spawn timing");}}
 
-/** @param {unknown} traceValue @param {import("@aerobeat/web-contracts").AeroAuthoredNotePalette | null} palette @param {string} flowContentHash */
-function validateFlowTraceBinding(traceValue, palette, flowContentHash) {
+/** @param {unknown} traceValue @param {import("@aerobeat/web-contracts").AeroAuthoredNotePalette | null} palette @param {string} flowContentHash @param {DataRecord} source */
+function validateFlowTraceBinding(traceValue, palette, flowContentHash, source) {
   const trace = requireRecord(traceValue, "note_palette_trace_mismatch");
   try { validateFlowPaletteReference(trace.notePalette, palette); }
   catch { throw dataError("note_palette_trace_mismatch", "Top conversion trace must bind the package note palette reference"); }
@@ -431,13 +448,63 @@ function validateFlowTraceBinding(traceValue, palette, flowContentHash) {
   const flowTrace = requireRecord(flowTraces[0], "flow_trace_invalid");
   try { validateFlowPaletteReference(flowTrace.notePalette, palette); }
   catch { throw dataError("flow_trace_invalid", "Flow conversion trace must bind the package note palette reference"); }
+  if (flowTrace.rulesetId !== FLOW_GRID_RULESET_ID || !hasExactFlowRulesetVariants(flowTrace.rulesetVariants) || flowTrace.obstacleContract !== "normalized_obstacle_v2") throw dataError("flow_trace_invalid", "Flow conversion trace must bind the exact ordered successor rulesets and obstacle contract");
+  for (const key of ["sourceHash", "sourceInfoFormat", "sourceInfoVersion", "sourceInfoHash", "sourceDifficultyPath", "sourceBeatmapFormat", "sourceBeatmapVersion", "sourceDifficultyHash"]) if (flowTrace[key] !== source[key]) throw dataError("flow_trace_invalid", "Flow conversion trace must bind exact package source provenance");
   if (flowTrace.contentHash !== flowContentHash) throw dataError("flow_trace_content_hash_mismatch", "Flow conversion trace must bind the exact Flow content hash");
 }
+
+/** @param {unknown} value */
+function hasExactFlowRulesetVariants(value) { return Array.isArray(value) && value.length === FLOW_RULESET_VARIANTS.length && value.every((entry, index) => entry === FLOW_RULESET_VARIANTS[index]); }
+
+/** @param {DataRecord} packageValue */
+async function semanticParityHash(packageValue) { return sha256Hex(canonicalJson(semanticParityProjection(packageValue))); }
+/** @param {DataRecord} packageValue */
+function semanticParityProjection(packageValue) {
+  const charts = requireArray(packageValue.charts, "semantic_parity_invalid");
+  return {
+    packageSchema: packageValue.schemaId,
+    packageSchemaVersion: packageValue.schemaVersion,
+    packageVersion: packageValue.packageVersion,
+    packageId: packageValue.packageId,
+    songId: packageValue.songId,
+    source: isPlainDataRecord(packageValue.source) ? pick(packageValue.source, ["provider", "sourceId", "sourceVersionHash", "difficulty", "sourceInfoFormat", "sourceInfoVersion", "sourceInfoHash", "sourceDifficultyPath", "sourceBeatmapFormat", "sourceBeatmapVersion", "sourceDifficultyHash", "spawnTiming", "obstacleContract", "converterProfile"]) : null,
+    notePalette: Object.hasOwn(packageValue, "notePalette") ? packageValue.notePalette : null,
+    song: isPlainDataRecord(packageValue.song) ? pick(packageValue.song, ["schemaId", "schemaVersion", "recordVersion", "songId", "songName", "durationSec", "audio", "timing"]) : null,
+    sets: Array.isArray(packageValue.sets) ? packageValue.sets.map((set) => isPlainDataRecord(set) ? pick(set, ["schemaId", "schemaVersion", "recordVersion", "setId", "setName", "songId", "chartId"]) : null) : [],
+    recipeDefinitions: Array.isArray(packageValue.recipeDefinitions) ? packageValue.recipeDefinitions.map(projectDefinition) : [],
+    rulesetDefinitions: Array.isArray(packageValue.rulesetDefinitions) ? packageValue.rulesetDefinitions.map(projectDefinition) : [],
+    presentationSuggestion: Object.hasOwn(packageValue, "presentationSuggestion") ? packageValue.presentationSuggestion : null,
+    charts: charts.map((chartValue) => {
+      if (!isPlainDataRecord(chartValue)) return null;
+      const prototype = isPlainDataRecord(chartValue.prototype) ? chartValue.prototype : null;
+      return {
+        schemaId: chartValue.schemaId, schemaVersion: chartValue.schemaVersion, recordVersion: chartValue.recordVersion, chartId: chartValue.chartId, chartName: chartValue.chartName, mode: chartValue.mode, difficulty: chartValue.difficulty,
+        ...(Object.hasOwn(chartValue, "rulesetId") ? { rulesetId: chartValue.rulesetId } : {}),
+        ...(chartValue.mode === "flow" ? { ...(Object.hasOwn(chartValue, "rulesetVariants") ? { rulesetVariants: chartValue.rulesetVariants } : {}), notePalette: chartValue.notePalette, contentHash: chartValue.contentHash } : {}),
+        prototype: prototype ? pick(prototype, ["contractId", "recipeId", "recipeVersion", "rulesetId", "rulesetVersion", "modifiers", "converterProfile", "regenerationRequiredFor"]) : null,
+        presentationSuggestion: Object.hasOwn(chartValue, "presentationSuggestion") ? chartValue.presentationSuggestion : null,
+        beats: Array.isArray(chartValue.beats) ? chartValue.beats.map(projectParityBeat) : []
+      };
+    }),
+    traces: projectTraces(packageValue.conversionTrace)
+  };
+}
+/** @param {unknown} value */
+function projectDefinition(value) { if (!isPlainDataRecord(value)) return null; const result = {}; for (const key of Reflect.ownKeys(value)) { if (typeof key !== "string" || /hash/iu.test(key)) continue; const descriptor = Object.getOwnPropertyDescriptor(value, key); if (descriptor && "value" in descriptor && descriptor.enumerable) result[key] = descriptor.value; } return result; }
+/** @param {unknown} value */
+function projectTraces(value) { if (!isPlainDataRecord(value)) return null; const boxing = Array.isArray(value.boxing) ? value.boxing.map((trace) => isPlainDataRecord(trace) ? { ...pick(trace, ["chartId", "difficulty", "bpm", "recipeId", "rulesetId", "sourceInfoFormat", "sourceInfoVersion", "sourceInfoHash", "sourceDifficultyPath", "sourceBeatmapFormat", "sourceBeatmapVersion", "sourceDifficultyHash", "spawnTiming", "converterProfile"]), optimizer: trace.optimizer, events: trace.events } : null) : []; const flow = Array.isArray(value.flow) ? value.flow : null; return { boxing, flow, spawnTiming: value.spawnTiming, ...(value.converterProfile ? { converterProfile: value.converterProfile } : {}) }; }
+/** @param {DataRecord} value @param {readonly string[]} keys */
+function pick(value, keys) { const result = {}; for (const key of keys) { const descriptor = Object.getOwnPropertyDescriptor(value, key); if (descriptor && "value" in descriptor && descriptor.enumerable) result[key] = descriptor.value; } return result; }
+/** @param {unknown} beat */
+function projectParityBeat(beat) { return isPlainDataRecord(beat) ? pick(beat, ["start", "end", "type", "eventId", "sourceEventIds", "hand", "placement", "direction", "angleOffset", "requiresDirection", "sourceGeometry", "gameplayGeometry", "gridMask", "startPlacement", "endPlacement", "startDirection", "endDirection", "tailPlacement", "checkpointCount", "modifier", "spatialTarget", "guardTarget", "checkpoint", "blockedCells"]) : null; }
 
 /** @param {DataRecord} chart */
 function flowScoringProjection(chart) {
   const result = Object.create(null);
-  for (const key of Object.keys(chart)) if (key !== "notePalette" && key !== "contentHash") result[key] = chart[key];
+  for (const key of Object.keys(chart)) if (key !== "notePalette" && key !== "contentHash" && key !== "rulesetVariants") result[key] = chart[key];
+  // The successor declaration changes package/chart integrity, not the existing Flow Grid score partition.
+  result.schemaId = "aerobeat.chart.flow.v4";
+  result.schemaVersion = 4;
   return result;
 }
 

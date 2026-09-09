@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import {
   aeroContentRuntimeCapabilities,
   aeroContentRuntimeDescriptor,
@@ -13,6 +14,7 @@ import {
   maximumAuthoredTimelineMs,
   validateRuntimePackage
 } from "../src/index.js";
+import { parseAeroPackage } from "../src/assets.js";
 import { cloneFrozenData } from "../src/runtime-data.js";
 
 const BOXING_PUNCH_CASES=Object.freeze([Object.freeze({type:"straight_left",hand:"left"}),Object.freeze({type:"straight_right",hand:"right"}),Object.freeze({type:"hook_left",hand:"left"}),Object.freeze({type:"hook_right",hand:"right"}),Object.freeze({type:"uppercut_left",hand:"left"}),Object.freeze({type:"uppercut_right",hand:"right"})]);
@@ -37,6 +39,47 @@ assert.equal(aeroContentServiceId, "aero.content.library");
 assert.equal(aeroContentRuntimeDescriptor.implementationState, "implemented");
 assert.equal(aeroContentRuntimeCapabilities.playlistAllowlistRequired, false);
 assert.equal(maximumAuthoredTimelineMs, 86_400_000);
+const successorFixture = JSON.parse(await readFile(new URL("../fixtures/flow-colliders-3c9d-successor-v1.json", import.meta.url), "utf8"));
+assert.deepEqual(successorFixture.expected, {
+  packageHash: "sha256:60e850b3a822b22f34ff1050e0f8531b5d34ce8e3bb3a01bd3208ae27a074b92",
+  flowContentHash: "sha256:329bf3af3435f309670a307748f70585cf4be15372d4a7b54a658fa28cfd6145",
+  semanticParityHash: "sha256:978c9d7d1415e5597e1e2560b88090a05236088d117f422dae0222f21182cc99"
+});
+const successorEnvelope = makeAeroPackage(successorFixture.package, successorFixture.expected.packageHash.slice(7), []);
+const parsedSuccessorEnvelope = await parseAeroPackage(successorEnvelope);
+assert.equal(parsedSuccessorEnvelope.packageHash, successorFixture.expected.packageHash, "AEROPKG1 envelope must retain the exact declared package hash");
+const successorValidation = await validateRuntimePackage(parsedSuccessorEnvelope.package, { declaredPackageHash: parsedSuccessorEnvelope.packageHash });
+const successorFlowChart = successorValidation.package.charts.find((chart) => chart.mode === "flow");
+const successorFlowVariants = successorValidation.variants.filter((variant) => variant.mode === "flow");
+assert.equal(successorFlowChart.contentHash, successorFixture.expected.flowContentHash);
+assert.equal(successorValidation.packageHash.value, successorFixture.expected.packageHash.slice(7));
+assert.equal(successorValidation.semanticParityHash.value, successorFixture.expected.semanticParityHash.slice(7));
+assert.deepEqual(successorFlowVariants.map((variant) => [variant.variantId, variant.rulesetId, variant.recipeId, variant.ranked, variant.localOnly]), [
+  [successorFlowChart.chartId, "flow_grid_v2", null, true, false],
+  [`${successorFlowChart.chartId}~ruleset-flow_colliders_v1`, "flow_colliders_v1", null, false, true]
+]);
+assert.notDeepEqual(successorFlowVariants[0].scoreIdentityHash, successorFlowVariants[1].scoreIdentityHash, "Flow rulesets require distinct score partitions");
+const predecessorScoringChart = structuredClone(successorFlowChart); predecessorScoringChart.schemaId = "aerobeat.chart.flow.v4"; predecessorScoringChart.schemaVersion = 4; delete predecessorScoringChart.rulesetVariants; delete predecessorScoringChart.notePalette; delete predecessorScoringChart.contentHash;
+const predecessorScoringMapHash = hashJson(predecessorScoringChart);
+const predecessorScoreIdentity = hashJson({ packageId: successorValidation.packageId, chartId: successorFlowChart.chartId, rulesetId: "flow_grid_v2", recipeId: null, modifierIds: [], mapHash: predecessorScoringMapHash, ranked: true });
+assert.equal(successorFlowVariants[0].scoreIdentityHash.value, predecessorScoreIdentity, "successor Flow Grid retains the historical score partition identity");
+assert.equal(successorFlowVariants[0].chart, successorFlowVariants[1].chart, "both Flow rulesets share one exact frozen chart object");
+assert.equal(successorFlowVariants[0].chart.beats, successorFlowVariants[1].chart.beats, "both Flow rulesets share one exact authored beats array");
+assert.equal(canonical(successorFlowVariants[0].chart.beats), canonical(successorFlowVariants[1].chart.beats), "both Flow rulesets resolve identical authored beat bytes");
+for (const rulesetVariants of [undefined, ["flow_grid_v2"], ["flow_colliders_v1"], ["flow_colliders_v1", "flow_grid_v2"], ["flow_grid_v2", "flow_colliders_v1", "flow_colliders_v1"]]) {
+  const tampered = structuredClone(successorFixture.package);
+  const chart = tampered.charts.find((entry) => entry.mode === "flow");
+  const trace = tampered.conversionTrace.flow[0];
+  if (rulesetVariants === undefined) { delete chart.rulesetVariants; delete trace.rulesetVariants; }
+  else { chart.rulesetVariants = rulesetVariants; trace.rulesetVariants = rulesetVariants; }
+  chart.contentHash = `sha256:${hashJson({ beats: chart.beats, rulesetId: chart.rulesetId, ...(rulesetVariants === undefined ? {} : { rulesetVariants }), notePalette: chart.notePalette })}`;
+  trace.contentHash = chart.contentHash;
+  await assert.rejects(() => validateRuntimePackage(tampered), hasCode("flow_chart_schema_invalid"), "missing, partial, reordered, or duplicate successor identities fail closed after attacker rehash");
+}
+const traceRulesetMismatch = structuredClone(successorFixture.package); traceRulesetMismatch.conversionTrace.flow[0].rulesetVariants = ["flow_colliders_v1", "flow_grid_v2"];
+await assert.rejects(() => validateRuntimePackage(traceRulesetMismatch), hasCode("flow_trace_invalid"), "Flow trace ordered rulesets must agree with the exact chart identity");
+const perVariantBeats = structuredClone(successorFixture.package); perVariantBeats.charts.find((chart) => chart.mode === "flow").beatsByRuleset = { flow_grid_v2: [], flow_colliders_v1: [] };
+await assert.rejects(() => validateRuntimePackage(perVariantBeats), hasCode("flow_variant_beats_forbidden"), "per-ruleset beat authority is forbidden");
 const canonicalTiming = { anchorMs: 250, tempoSegments: [{ startBeat: 0, bpm: 120 }, { startBeat: 4, bpm: 60 }, { startBeat: 8, bpm: 240 }], stopSegments: [{ startBeat: 2, durationMs: 125 }, { startBeat: 6, durationMs: 375 }], timeSignatureSegments: [{ startBeat: 0, numerator: 4, denominator: 4 }] };
 const canonicalMapper = createAuthoredBeatToTimelineMs(canonicalTiming);
 assert.equal(authoredBeatToTimelineMs({ anchorMs: 0, tempoSegments: [{ startBeat: 0, bpm: 120 }], stopSegments: [], timeSignatureSegments: [{ startBeat: 0, numerator: 4, denominator: 4 }] }, 3), 1500, "constant timing uses the contract authority");
@@ -53,10 +96,10 @@ for (const malformed of [
   { anchorMs: 0, tempoSegments: [{ startBeat: 0, bpm: 120 }], stopSegments: [{ startBeat: 1, durationMs: 0 }], timeSignatureSegments: [{ startBeat: 0, numerator: 4, denominator: 4 }] }
 ]) assert.throws(() => createAuthoredBeatToTimelineMs(malformed), TypeError);
 const legacyValidation = await validateRuntimePackage(basePackage);
-assert.equal(legacyValidation.variants.length, 5);
+assert.equal(legacyValidation.variants.length, 6);
 assert.throws(() => cloneFrozenData(Array(100_000).fill(null)), hasCode("data_too_large"), "generic data cloning must retain its 100,000-item default");
 const largeCanonicalPackage = packageWithFlowEvents(basePackage, 20_000);
-assert.equal((await validateRuntimePackage(largeCanonicalPackage)).variants.length, 5, "package validation must admit a valid canonical package above the generic item bound");
+assert.equal((await validateRuntimePackage(largeCanonicalPackage)).variants.length, 6, "package validation must admit a valid canonical package above the generic item bound");
 const excessiveCanonicalPackage = packageWithFlowEvents(basePackage, 84_000);
 await assert.rejects(() => validateRuntimePackage(excessiveCanonicalPackage), hasCode("data_too_large"), "package validation must remain bounded at 500,000 items");
 const cyclicPackage = structuredClone(basePackage); cyclicPackage.loop = cyclicPackage;
@@ -72,10 +115,10 @@ assert.equal(Object.hasOwn(legacyComposite.chart.prototype, "converterProfile"),
 assert.equal(legacyComposite.chart.prototype.contentHash, `sha256:${hashJson({ beats: legacyComposite.chart.beats, recipeId: legacyComposite.recipeId, rulesetId: legacyComposite.rulesetId, sourceHash: legacyComposite.chart.prototype.sourceHash })}`);
 const profilePackage = await makePackage(audioHash, canonicalConverterProfile);
 const profileValidation = await validateRuntimePackage(profilePackage);
-assert.equal(profileValidation.variants.length, 5);
+assert.equal(profileValidation.variants.length, 6);
 assert.deepEqual(profileValidation.variants.filter((entry) => entry.mode === "boxing").map((entry) => entry.chart.prototype.converterProfile.contentHash), Array(4).fill(canonicalConverterProfile.contentHash));
 const reachPackage = await makePackage(audioHash, reachConverterProfile);
-assert.equal((await validateRuntimePackage(reachPackage)).variants.length, 5);
+assert.equal((await validateRuntimePackage(reachPackage)).variants.length, 6);
 const profileBase = profileValidation.variants.find((entry) => entry.mode === "boxing");
 assert.ok(profileBase);
 const profileComposite = await composeRuntimeVariant(profileBase, ["no_squats"], profilePackage.packageId);
@@ -101,7 +144,20 @@ runtime.subscribe(() => { listenerCalls += 1; throw new Error("expected isolated
 await runtime.loadPackage({ package: basePackage, packageHash: `sha256:${packageHash}`, assets: [{ path: "song.ogg", bytes: audioBytes }] });
 let snapshot = runtime.getSnapshot();
 assert.equal(snapshot.state, "ready");
-assert.equal(snapshot.variants.length, 5);
+assert.equal(snapshot.variants.length, 6);
+const runtimeFlowVariants = snapshot.variants.filter((variant) => variant.mode === "flow");
+assert.deepEqual(runtimeFlowVariants.map((variant) => variant.rulesetId), ["flow_grid_v2", "flow_colliders_v1"]);
+assert.equal(snapshot.selectedVariant.rulesetId, "flow_grid_v2", "Flow Grid remains the exact default");
+const gridResolvedEvents = snapshot.resolvedEvents;
+await runtime.selectVariant(runtimeFlowVariants[1].variantId);
+const colliderResolvedEvents = runtime.getSnapshot().resolvedEvents;
+assert.deepEqual(colliderResolvedEvents.map((event) => event.authoredBeat), gridResolvedEvents.map((event) => event.authoredBeat), "both Flow variants resolve the same exact authored event objects");
+assert.equal(colliderResolvedEvents.every((event, index) => event.authoredBeat === gridResolvedEvents[index].authoredBeat), true, "shared Flow bytes retain object identity across ruleset resolution");
+assert.equal(colliderResolvedEvents.every((event) => event.variantId === runtimeFlowVariants[1].variantId && event.chartId === runtimeFlowVariants[1].chartId), true);
+await runtime.selectVariant(runtimeFlowVariants[0].variantId);
+snapshot = runtime.getSnapshot();
+const publicSuccessorJson = JSON.stringify(snapshot);
+for (const forbidden of ["colliderRadius", "colliderCenter", "collisionSettings", "wrist", "nose", "trajectory", "segmentEndpoint", "confidence", "calibrationId", "frameId", "contactEpisode"]) assert.equal(publicSuccessorJson.includes(forbidden), false, `public content snapshot omits private ${forbidden} evidence`);
 assert.equal(snapshot.assets[0].readable, true);
 assert.equal(snapshot.lineage.sourceId, "not-an-allowlist-id");
 assert.equal(Object.isFrozen(snapshot), true);
@@ -211,13 +267,21 @@ await assert.rejects(() => validateRuntimePackage(mismatchedFlowHash), hasCode("
 const compatibleV2Beatmap = structuredClone(basePackage);
 compatibleV2Beatmap.source.sourceBeatmapFormat = "v2";
 compatibleV2Beatmap.source.sourceBeatmapVersion = "2.6.0";
+compatibleV2Beatmap.conversionTrace.flow[0].sourceBeatmapFormat = "v2";
+compatibleV2Beatmap.conversionTrace.flow[0].sourceBeatmapVersion = "2.6.0";
 await validateRuntimePackage(compatibleV2Beatmap);
 const compatibleV4NullVersions = structuredClone(basePackage);
 compatibleV4NullVersions.source.sourceInfoFormat = "v4";
 compatibleV4NullVersions.source.sourceInfoVersion = null;
 compatibleV4NullVersions.source.sourceBeatmapFormat = "v4";
 compatibleV4NullVersions.source.sourceBeatmapVersion = null;
+compatibleV4NullVersions.conversionTrace.flow[0].sourceInfoFormat = "v4";
+compatibleV4NullVersions.conversionTrace.flow[0].sourceInfoVersion = null;
+compatibleV4NullVersions.conversionTrace.flow[0].sourceBeatmapFormat = "v4";
+compatibleV4NullVersions.conversionTrace.flow[0].sourceBeatmapVersion = null;
 await validateRuntimePackage(compatibleV4NullVersions);
+const mismatchedFlowSourceTrace = structuredClone(basePackage); mismatchedFlowSourceTrace.conversionTrace.flow[0].sourceDifficultyHash = `sha256:${"9".repeat(64)}`;
+await assert.rejects(() => validateRuntimePackage(mismatchedFlowSourceTrace), hasCode("flow_trace_invalid"), "Flow trace must agree with exact package source provenance");
 for (const [infoFormat, beatmapFormat] of [["v2", "v4"], ["v4", "v2"], ["v4", "v3"]]) {
   const incompatibleFormats = structuredClone(basePackage);
   incompatibleFormats.source.sourceInfoFormat = infoFormat;
@@ -374,6 +438,8 @@ const versionThreePackage = structuredClone(basePackage); versionThreePackage.sc
 await assert.rejects(() => validateRuntimePackage(versionThreePackage), hasCode("spawn_timing_reimport_required"));
 const versionFourPackage = structuredClone(basePackage); versionFourPackage.schemaId = "aerobeat.song-package.v4"; versionFourPackage.schemaVersion = 4; versionFourPackage.packageVersion = "4.0.0";
 await assert.rejects(() => validateRuntimePackage(versionFourPackage), hasCode("spawn_timing_reimport_required"));
+const versionFivePackage = structuredClone(basePackage); versionFivePackage.schemaId = "aerobeat.song-package.v5"; versionFivePackage.schemaVersion = 5; versionFivePackage.packageVersion = "5.0.0";
+await assert.rejects(() => validateRuntimePackage(versionFivePackage), hasCode("flow_colliders_reimport_required"), "the successor runtime never promotes historical v5 bytes");
 for(const [mutate,code] of [[(value)=>{delete value.source.spawnTiming.noteJumpStartBeatOffset;},"spawn_timing_invalid"],[(value)=>{value.source.spawnTiming.extra=true;},"spawn_timing_invalid"],[(value)=>{value.source.spawnTiming.reactionTimeMs+=1;},"spawn_timing_mismatch"],[(value)=>{value.source.spawnTiming.noteJumpMovementSpeed=0;},"spawn_timing_njs_invalid"],[(value)=>{value.source.spawnTiming.bpm=0;},"spawn_timing_bpm_invalid"]]){const invalid=structuredClone(basePackage);mutate(invalid);await assert.rejects(()=>validateRuntimePackage(invalid),hasCode(code));}
 const traceTimingMismatch=structuredClone(basePackage);traceTimingMismatch.conversionTrace.boxing[0].spawnTiming.reactionTimeMs+=1;await assert.rejects(()=>validateRuntimePackage(traceTimingMismatch),hasCode("spawn_timing_trace_mismatch"));
 const shadowedResolvedField = structuredClone(basePackage);
@@ -699,7 +765,7 @@ function withPalette(packageRecord, left, right) {
 /** @param {Record<string, unknown>} packageRecord */
 function rehashFlow(packageRecord) {
   const flow = packageRecord.charts.find((chart) => chart.mode === "flow");
-  flow.contentHash = `sha256:${hashJson({ beats: flow.beats, rulesetId: flow.rulesetId, notePalette: flow.notePalette })}`;
+  flow.contentHash = `sha256:${hashJson({ beats: flow.beats, rulesetId: flow.rulesetId, rulesetVariants: flow.rulesetVariants, notePalette: flow.notePalette })}`;
   if (packageRecord.conversionTrace) {
     packageRecord.conversionTrace.notePalette = flow.notePalette;
     if (Array.isArray(packageRecord.conversionTrace.flow) && packageRecord.conversionTrace.flow[0]) {
@@ -737,15 +803,15 @@ async function makePackage(declaredAudioHash, converterProfile = null) {
     charts.push({ schemaId: "aerobeat.chart.boxing.v1", schemaVersion: 1, recordVersion: 1, chartId: `chart-${token}`, chartName: token, mode: "boxing", difficulty: "Expert", prototype: { contractId: "aerobeat.boxing.prototype.v1", recipeId, recipeVersion: "1.0.0", rulesetId, rulesetVersion: "1.0.0", sourceHash, recipeHash: `sha256:${"1".repeat(64)}`, rulesetHash: `sha256:${"2".repeat(64)}`, contentHash: `sha256:${contentHash}`, modifiers: [], ...(converterProfile ? { converterProfile: structuredClone(converterProfile) } : {}), regenerationRequiredFor: [] }, beats });
   }
   const flowBeats = [{ start: 1, type: "note", hand: "left", placement: 4, direction: 1, requiresDirection: true }];
-  const flowChart = { schemaId: "aerobeat.chart.flow.v4", schemaVersion: 4, recordVersion: 2, rulesetId: "flow_grid_v2", chartId: "chart-flow", chartName: "Flow", mode: "flow", difficulty: "Expert", notePalette: null, contentHash: `sha256:${hashJson({ beats: flowBeats, rulesetId: "flow_grid_v2", notePalette: null })}`, beats: flowBeats };
+  const flowChart = { schemaId: "aerobeat.chart.flow.v5", schemaVersion: 5, recordVersion: 2, rulesetId: "flow_grid_v2", rulesetVariants: ["flow_grid_v2", "flow_colliders_v1"], chartId: "chart-flow", chartName: "Flow", mode: "flow", difficulty: "Expert", notePalette: null, contentHash: `sha256:${hashJson({ beats: flowBeats, rulesetId: "flow_grid_v2", rulesetVariants: ["flow_grid_v2", "flow_colliders_v1"], notePalette: null })}`, beats: flowBeats };
   charts.push(flowChart);
   return {
-    schemaId: "aerobeat.song-package.v5", schemaVersion: 5, packageVersion: "5.0.0", packageId: "package-arbitrary-compatible", songId: "song-arbitrary", songName: "Arbitrary Compatible Map", notePalette: null,
+    schemaId: "aerobeat.song-package.v6", schemaVersion: 6, packageVersion: "6.0.0", packageId: "package-arbitrary-compatible", songId: "song-arbitrary", songName: "Arbitrary Compatible Map", notePalette: null,
     source: { provider: "community", sourceId: "not-an-allowlist-id", sourceVersionHash: "source-version", difficulty: "Expert", sourceInfoFormat: "v2", sourceInfoVersion: "2.1.0", sourceInfoHash: `sha256:${"1".repeat(64)}`, sourceDifficultyPath: "Expert.dat", sourceBeatmapFormat: "v3", sourceBeatmapVersion: "3.3.0", sourceDifficultyHash: `sha256:${"2".repeat(64)}`, sourceHash, spawnTiming: structuredClone(spawnTiming), obstacleContract: "normalized_obstacle_v2", ...(converterProfile ? { converterProfile: structuredClone(converterProfile) } : {}) },
     song: { schemaId: "aerobeat.song.v1", schemaVersion: 1, recordVersion: 1, songId: "song-arbitrary", songName: "Arbitrary Compatible Map", durationSec: 10, audio: { filePath: "song.ogg", contentHash: `sha256:${declaredAudioHash}` }, timing: { anchorMs: 0, tempoSegments: [{ startBeat: 0, bpm: 120 }], stopSegments: [], timeSignatureSegments: [{ startBeat: 0, numerator: 4, denominator: 4 }] } },
     charts,
     sets: charts.map((chart, index) => ({ schemaId: "aerobeat.set.v1", schemaVersion: 1, recordVersion: 1, setId: `set-${index}`, setName: chart.chartName, songId: "song-arbitrary", chartId: chart.chartId })),
-    recipeDefinitions: [], rulesetDefinitions: [], conversionTrace: { notePalette: null, spawnTiming: structuredClone(spawnTiming), boxing: charts.filter((chart) => chart.mode === "boxing").map((chart) => ({ chartId: chart.chartId, spawnTiming: structuredClone(spawnTiming), ...(converterProfile ? { converterProfile: structuredClone(converterProfile) } : {}) })), flow: [{ obstacleContract: "normalized_obstacle_v2", sourceHash, sourceInfoFormat: "v2", sourceInfoVersion: "2.1.0", sourceInfoHash: `sha256:${"1".repeat(64)}`, sourceDifficultyPath: "Expert.dat", sourceBeatmapFormat: "v3", sourceBeatmapVersion: "3.3.0", sourceDifficultyHash: `sha256:${"2".repeat(64)}`, spawnTiming: structuredClone(spawnTiming), notePalette: null, contentHash: flowChart.contentHash }], ...(converterProfile ? { converterProfile: structuredClone(converterProfile) } : {}) }, presentationSuggestion: null
+    recipeDefinitions: [], rulesetDefinitions: [], conversionTrace: { notePalette: null, spawnTiming: structuredClone(spawnTiming), boxing: charts.filter((chart) => chart.mode === "boxing").map((chart) => ({ chartId: chart.chartId, spawnTiming: structuredClone(spawnTiming), ...(converterProfile ? { converterProfile: structuredClone(converterProfile) } : {}) })), flow: [{ obstacleContract: "normalized_obstacle_v2", rulesetId: "flow_grid_v2", rulesetVariants: ["flow_grid_v2", "flow_colliders_v1"], sourceHash, sourceInfoFormat: "v2", sourceInfoVersion: "2.1.0", sourceInfoHash: `sha256:${"1".repeat(64)}`, sourceDifficultyPath: "Expert.dat", sourceBeatmapFormat: "v3", sourceBeatmapVersion: "3.3.0", sourceDifficultyHash: `sha256:${"2".repeat(64)}`, spawnTiming: structuredClone(spawnTiming), notePalette: null, contentHash: flowChart.contentHash }], ...(converterProfile ? { converterProfile: structuredClone(converterProfile) } : {}) }, presentationSuggestion: null
   };
 }
 /** @param {Uint8Array} bytes @param {(metadata: Record<string, unknown>) => Record<string, unknown>} transform */

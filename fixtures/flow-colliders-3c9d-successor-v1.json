@@ -1,0 +1,3322 @@
+{
+  "schema": "aerobeat/runtime_successor_fixture",
+  "version": 1,
+  "expected": {
+    "packageHash": "sha256:60e850b3a822b22f34ff1050e0f8531b5d34ce8e3bb3a01bd3208ae27a074b92",
+    "flowContentHash": "sha256:329bf3af3435f309670a307748f70585cf4be15372d4a7b54a658fa28cfd6145",
+    "semanticParityHash": "sha256:978c9d7d1415e5597e1e2560b88090a05236088d117f422dae0222f21182cc99"
+  },
+  "package": {
+    "schemaId": "aerobeat.song-package.v6",
+    "schemaVersion": 6,
+    "packageVersion": "6.0.0",
+    "packageId": "ab-songpkg-3c9d-5662f64a12c7-easy",
+    "songId": "ab-song-3c9d",
+    "songName": "Flow Orientation",
+    "source": {
+      "provider": "synthetic",
+      "sourceId": "3C9D",
+      "sourceVersionHash": "5662f64a12c76a3dd11a5f6ee22611608cd06760",
+      "difficulty": "Easy",
+      "sourceInfoFormat": "v2",
+      "sourceInfoVersion": "2.1.0",
+      "sourceInfoHash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "sourceDifficultyPath": "Easy.dat",
+      "sourceBeatmapFormat": "v3",
+      "sourceBeatmapVersion": "3.3.0",
+      "sourceDifficultyHash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "sourceHash": "sha256:b00ddedd0d3c17ca07953a958d5fbdcee95c54c447c43f722813c51e8e9837aa",
+      "spawnTiming": {
+        "schema": "aerobeat/beatsaber_spawn_timing",
+        "version": 1,
+        "algorithm": "beatsaber_core_hjd_v1",
+        "maxHalfJumpDistance": 17.999,
+        "startHalfJumpDurationBeats": 4,
+        "minimumHalfJumpDurationBeats": 0.25,
+        "bpm": 120,
+        "noteJumpMovementSpeed": 10,
+        "noteJumpStartBeatOffset": 1,
+        "halfJumpDurationBeats": 3,
+        "reactionTimeMs": 1500,
+        "jumpDistanceMeters": 30
+      },
+      "obstacleContract": "normalized_obstacle_v2"
+    },
+    "notePalette": null,
+    "song": {
+      "schemaId": "aerobeat.song.v1",
+      "schemaVersion": 1,
+      "recordVersion": 1,
+      "songId": "ab-song-3c9d",
+      "songName": "Flow Orientation",
+      "durationSec": 28,
+      "timing": {
+        "anchorMs": 0,
+        "tempoSegments": [
+          {
+            "startBeat": 0,
+            "bpm": 120
+          }
+        ],
+        "stopSegments": [],
+        "timeSignatureSegments": [
+          {
+            "startBeat": 0,
+            "numerator": 4,
+            "denominator": 4
+          }
+        ]
+      }
+    },
+    "charts": [
+      {
+        "schemaId": "aerobeat.chart.boxing.v1",
+        "schemaVersion": 1,
+        "recordVersion": 1,
+        "chartId": "ab-chart-3c9d-boxing-easy-semantic-track-row-family",
+        "chartName": "3c9d Easy Boxing - Semantic Track / Row Family",
+        "mode": "boxing",
+        "difficulty": "Easy",
+        "prototype": {
+          "contractId": "aerobeat.boxing.prototype.v1",
+          "recipeId": "row_family_balanced_height_v1",
+          "recipeVersion": "1.0.0",
+          "rulesetId": "boxing_semantic_track_v1",
+          "rulesetVersion": "1.0.0",
+          "sourceHash": "sha256:b00ddedd0d3c17ca07953a958d5fbdcee95c54c447c43f722813c51e8e9837aa",
+          "recipeHash": "sha256:be4fff0d819f055ef51fcefc708aa4680824c635946775c4f0f4e1a97958b932",
+          "rulesetHash": "sha256:9fac893efe3cbde157d32e33a6083e1705692d8cc29f1c2d3a9d932d1bf9a789",
+          "contentHash": "sha256:772952e230733850ec46fd654071fdfb611ec3b07bb0c7b8027665cfb966c501",
+          "modifiers": [],
+          "regenerationRequiredFor": [
+            "punchMinSpacingMs",
+            "reachSubcellsPerBeat",
+            "familyBalance",
+            "guardRelocation"
+          ]
+        },
+        "beats": [
+          {
+            "start": 21,
+            "type": "hook_right",
+            "eventId": "boxing-hook-right-bae9d2638d82",
+            "sourceEventIds": [
+              "note-000"
+            ],
+            "spatialTarget": {
+              "targetCell": 1,
+              "acceptedSubcells": [
+                2,
+                3,
+                10,
+                11
+              ],
+              "sourceCell": 2,
+              "entryDirection": "left"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 25,
+            "type": "hook_left",
+            "eventId": "boxing-hook-left-67ad2b5feaee",
+            "sourceEventIds": [
+              "note-001"
+            ],
+            "spatialTarget": {
+              "targetCell": 6,
+              "acceptedSubcells": [
+                20,
+                21,
+                28,
+                29
+              ],
+              "sourceCell": 5,
+              "entryDirection": "right"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 27,
+            "type": "hook_right",
+            "eventId": "boxing-hook-right-89a72149e99b",
+            "sourceEventIds": [
+              "note-002"
+            ],
+            "spatialTarget": {
+              "targetCell": 9,
+              "acceptedSubcells": [
+                34,
+                35,
+                42,
+                43
+              ],
+              "sourceCell": 10,
+              "entryDirection": "left"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 28.5,
+            "type": "hook_left",
+            "eventId": "boxing-hook-left-5e0080146e6e",
+            "sourceEventIds": [
+              "note-003"
+            ],
+            "spatialTarget": {
+              "targetCell": 2,
+              "acceptedSubcells": [
+                4,
+                5,
+                12,
+                13
+              ],
+              "sourceCell": 1,
+              "entryDirection": "right"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 33,
+            "type": "hook_right",
+            "eventId": "boxing-hook-right-1450f68d9f23",
+            "sourceEventIds": [
+              "note-004"
+            ],
+            "spatialTarget": {
+              "targetCell": 5,
+              "acceptedSubcells": [
+                18,
+                19,
+                26,
+                27
+              ],
+              "sourceCell": 6,
+              "entryDirection": "left"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 37,
+            "type": "hook_left",
+            "eventId": "boxing-hook-left-416620ec4eee",
+            "sourceEventIds": [
+              "note-005"
+            ],
+            "spatialTarget": {
+              "targetCell": 10,
+              "acceptedSubcells": [
+                36,
+                37,
+                44,
+                45
+              ],
+              "sourceCell": 9,
+              "entryDirection": "right"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 39,
+            "type": "hook_right",
+            "eventId": "boxing-hook-right-e77564a2e978",
+            "sourceEventIds": [
+              "note-006"
+            ],
+            "spatialTarget": {
+              "targetCell": 1,
+              "acceptedSubcells": [
+                2,
+                3,
+                10,
+                11
+              ],
+              "sourceCell": 2,
+              "entryDirection": "left"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 41,
+            "type": "hook_left",
+            "eventId": "boxing-hook-left-42790b3651b8",
+            "sourceEventIds": [
+              "note-007"
+            ],
+            "spatialTarget": {
+              "targetCell": 6,
+              "acceptedSubcells": [
+                20,
+                21,
+                28,
+                29
+              ],
+              "sourceCell": 5,
+              "entryDirection": "right"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 45,
+            "type": "hook_right",
+            "eventId": "boxing-hook-right-6d02aa463f69",
+            "sourceEventIds": [
+              "note-008"
+            ],
+            "spatialTarget": {
+              "targetCell": 9,
+              "acceptedSubcells": [
+                34,
+                35,
+                42,
+                43
+              ],
+              "sourceCell": 10,
+              "entryDirection": "left"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 49,
+            "type": "hook_left",
+            "eventId": "boxing-hook-left-70e04ee24539",
+            "sourceEventIds": [
+              "note-009"
+            ],
+            "spatialTarget": {
+              "targetCell": 2,
+              "acceptedSubcells": [
+                4,
+                5,
+                12,
+                13
+              ],
+              "sourceCell": 1,
+              "entryDirection": "right"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 53,
+            "type": "hook_right",
+            "eventId": "boxing-hook-right-e160a7ec410f",
+            "sourceEventIds": [
+              "note-010"
+            ],
+            "spatialTarget": {
+              "targetCell": 5,
+              "acceptedSubcells": [
+                18,
+                19,
+                26,
+                27
+              ],
+              "sourceCell": 6,
+              "entryDirection": "left"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 55,
+            "type": "hook_left",
+            "eventId": "boxing-hook-left-d5719e76a0e5",
+            "sourceEventIds": [
+              "note-011"
+            ],
+            "spatialTarget": {
+              "targetCell": 10,
+              "acceptedSubcells": [
+                36,
+                37,
+                44,
+                45
+              ],
+              "sourceCell": 9,
+              "entryDirection": "right"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          }
+        ]
+      },
+      {
+        "schemaId": "aerobeat.chart.boxing.v1",
+        "schemaVersion": 1,
+        "recordVersion": 1,
+        "chartId": "ab-chart-3c9d-boxing-easy-spatial-grid-row-family",
+        "chartName": "3c9d Easy Boxing - Spatial Grid / Row Family",
+        "mode": "boxing",
+        "difficulty": "Easy",
+        "prototype": {
+          "contractId": "aerobeat.boxing.prototype.v1",
+          "recipeId": "row_family_balanced_height_v1",
+          "recipeVersion": "1.0.0",
+          "rulesetId": "boxing_spatial_grid_v1",
+          "rulesetVersion": "1.0.0",
+          "sourceHash": "sha256:b00ddedd0d3c17ca07953a958d5fbdcee95c54c447c43f722813c51e8e9837aa",
+          "recipeHash": "sha256:be4fff0d819f055ef51fcefc708aa4680824c635946775c4f0f4e1a97958b932",
+          "rulesetHash": "sha256:8dbef6bf1844773b20723d7fd1397026b2824addf7586036815b5facb77e77fe",
+          "contentHash": "sha256:360fb1a04f91a32cc6c42f397e46fb3ec62d3433d948ecf404f5f024d80f22f6",
+          "modifiers": [],
+          "regenerationRequiredFor": [
+            "punchMinSpacingMs",
+            "reachSubcellsPerBeat",
+            "familyBalance",
+            "guardRelocation"
+          ]
+        },
+        "beats": [
+          {
+            "start": 21,
+            "type": "hook_right",
+            "eventId": "boxing-hook-right-bae9d2638d82",
+            "sourceEventIds": [
+              "note-000"
+            ],
+            "spatialTarget": {
+              "targetCell": 1,
+              "acceptedSubcells": [
+                2,
+                3,
+                10,
+                11
+              ],
+              "sourceCell": 2,
+              "entryDirection": "left"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 25,
+            "type": "hook_left",
+            "eventId": "boxing-hook-left-67ad2b5feaee",
+            "sourceEventIds": [
+              "note-001"
+            ],
+            "spatialTarget": {
+              "targetCell": 6,
+              "acceptedSubcells": [
+                20,
+                21,
+                28,
+                29
+              ],
+              "sourceCell": 5,
+              "entryDirection": "right"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 27,
+            "type": "hook_right",
+            "eventId": "boxing-hook-right-89a72149e99b",
+            "sourceEventIds": [
+              "note-002"
+            ],
+            "spatialTarget": {
+              "targetCell": 9,
+              "acceptedSubcells": [
+                34,
+                35,
+                42,
+                43
+              ],
+              "sourceCell": 10,
+              "entryDirection": "left"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 28.5,
+            "type": "hook_left",
+            "eventId": "boxing-hook-left-5e0080146e6e",
+            "sourceEventIds": [
+              "note-003"
+            ],
+            "spatialTarget": {
+              "targetCell": 2,
+              "acceptedSubcells": [
+                4,
+                5,
+                12,
+                13
+              ],
+              "sourceCell": 1,
+              "entryDirection": "right"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 33,
+            "type": "hook_right",
+            "eventId": "boxing-hook-right-1450f68d9f23",
+            "sourceEventIds": [
+              "note-004"
+            ],
+            "spatialTarget": {
+              "targetCell": 5,
+              "acceptedSubcells": [
+                18,
+                19,
+                26,
+                27
+              ],
+              "sourceCell": 6,
+              "entryDirection": "left"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 37,
+            "type": "hook_left",
+            "eventId": "boxing-hook-left-416620ec4eee",
+            "sourceEventIds": [
+              "note-005"
+            ],
+            "spatialTarget": {
+              "targetCell": 10,
+              "acceptedSubcells": [
+                36,
+                37,
+                44,
+                45
+              ],
+              "sourceCell": 9,
+              "entryDirection": "right"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 39,
+            "type": "hook_right",
+            "eventId": "boxing-hook-right-e77564a2e978",
+            "sourceEventIds": [
+              "note-006"
+            ],
+            "spatialTarget": {
+              "targetCell": 1,
+              "acceptedSubcells": [
+                2,
+                3,
+                10,
+                11
+              ],
+              "sourceCell": 2,
+              "entryDirection": "left"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 41,
+            "type": "hook_left",
+            "eventId": "boxing-hook-left-42790b3651b8",
+            "sourceEventIds": [
+              "note-007"
+            ],
+            "spatialTarget": {
+              "targetCell": 6,
+              "acceptedSubcells": [
+                20,
+                21,
+                28,
+                29
+              ],
+              "sourceCell": 5,
+              "entryDirection": "right"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 45,
+            "type": "hook_right",
+            "eventId": "boxing-hook-right-6d02aa463f69",
+            "sourceEventIds": [
+              "note-008"
+            ],
+            "spatialTarget": {
+              "targetCell": 9,
+              "acceptedSubcells": [
+                34,
+                35,
+                42,
+                43
+              ],
+              "sourceCell": 10,
+              "entryDirection": "left"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 49,
+            "type": "hook_left",
+            "eventId": "boxing-hook-left-70e04ee24539",
+            "sourceEventIds": [
+              "note-009"
+            ],
+            "spatialTarget": {
+              "targetCell": 2,
+              "acceptedSubcells": [
+                4,
+                5,
+                12,
+                13
+              ],
+              "sourceCell": 1,
+              "entryDirection": "right"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 53,
+            "type": "hook_right",
+            "eventId": "boxing-hook-right-e160a7ec410f",
+            "sourceEventIds": [
+              "note-010"
+            ],
+            "spatialTarget": {
+              "targetCell": 5,
+              "acceptedSubcells": [
+                18,
+                19,
+                26,
+                27
+              ],
+              "sourceCell": 6,
+              "entryDirection": "left"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 55,
+            "type": "hook_left",
+            "eventId": "boxing-hook-left-d5719e76a0e5",
+            "sourceEventIds": [
+              "note-011"
+            ],
+            "spatialTarget": {
+              "targetCell": 10,
+              "acceptedSubcells": [
+                36,
+                37,
+                44,
+                45
+              ],
+              "sourceCell": 9,
+              "entryDirection": "right"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          }
+        ]
+      },
+      {
+        "schemaId": "aerobeat.chart.boxing.v1",
+        "schemaVersion": 1,
+        "recordVersion": 1,
+        "chartId": "ab-chart-3c9d-boxing-easy-semantic-track-cut-family",
+        "chartName": "3c9d Easy Boxing - Semantic Track / Cut Family",
+        "mode": "boxing",
+        "difficulty": "Easy",
+        "prototype": {
+          "contractId": "aerobeat.boxing.prototype.v1",
+          "recipeId": "cut_family_source_height_v1",
+          "recipeVersion": "1.0.0",
+          "rulesetId": "boxing_semantic_track_v1",
+          "rulesetVersion": "1.0.0",
+          "sourceHash": "sha256:b00ddedd0d3c17ca07953a958d5fbdcee95c54c447c43f722813c51e8e9837aa",
+          "recipeHash": "sha256:49dd15612012e21d1d16ffdeb0f8d4f76bf5947d3ea623c83796c29ca250b2e3",
+          "rulesetHash": "sha256:9fac893efe3cbde157d32e33a6083e1705692d8cc29f1c2d3a9d932d1bf9a789",
+          "contentHash": "sha256:9d6dd6cbaf6d6afe3eb21b951f83d1837482d923e29e4c4f95041cbe24e6e434",
+          "modifiers": [],
+          "regenerationRequiredFor": [
+            "punchMinSpacingMs",
+            "reachSubcellsPerBeat",
+            "familyBalance",
+            "guardRelocation"
+          ]
+        },
+        "beats": [
+          {
+            "start": 21,
+            "type": "straight_right",
+            "eventId": "boxing-straight-right-e2dcccd1275a",
+            "sourceEventIds": [
+              "note-000"
+            ],
+            "spatialTarget": {
+              "targetCell": 10,
+              "acceptedSubcells": [
+                35,
+                36,
+                37,
+                43,
+                44,
+                45
+              ],
+              "sourceCell": -1,
+              "qualificationMs": 100,
+              "semanticQualification": "straight"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 25,
+            "type": "straight_left",
+            "eventId": "boxing-straight-left-186cdfa6cf7b",
+            "sourceEventIds": [
+              "note-001"
+            ],
+            "spatialTarget": {
+              "targetCell": 9,
+              "acceptedSubcells": [
+                34,
+                35,
+                36,
+                42,
+                43,
+                44
+              ],
+              "sourceCell": -1,
+              "qualificationMs": 100,
+              "semanticQualification": "straight"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 27,
+            "type": "straight_right",
+            "eventId": "boxing-straight-right-4d06164b48d6",
+            "sourceEventIds": [
+              "note-002"
+            ],
+            "spatialTarget": {
+              "targetCell": 10,
+              "acceptedSubcells": [
+                35,
+                36,
+                37,
+                43,
+                44,
+                45
+              ],
+              "sourceCell": -1,
+              "qualificationMs": 100,
+              "semanticQualification": "straight"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 28.5,
+            "type": "straight_left",
+            "eventId": "boxing-straight-left-279c861db48b",
+            "sourceEventIds": [
+              "note-003"
+            ],
+            "spatialTarget": {
+              "targetCell": 9,
+              "acceptedSubcells": [
+                34,
+                35,
+                36,
+                42,
+                43,
+                44
+              ],
+              "sourceCell": -1,
+              "qualificationMs": 100,
+              "semanticQualification": "straight"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 33,
+            "type": "hook_right",
+            "eventId": "boxing-hook-right-88c48590d24c",
+            "sourceEventIds": [
+              "note-004"
+            ],
+            "spatialTarget": {
+              "targetCell": 9,
+              "acceptedSubcells": [
+                34,
+                35,
+                42,
+                43
+              ],
+              "sourceCell": 10,
+              "entryDirection": "left"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 37,
+            "type": "hook_left",
+            "eventId": "boxing-hook-left-57ee97b68eef",
+            "sourceEventIds": [
+              "note-005"
+            ],
+            "spatialTarget": {
+              "targetCell": 10,
+              "acceptedSubcells": [
+                36,
+                37,
+                44,
+                45
+              ],
+              "sourceCell": 9,
+              "entryDirection": "right"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 39,
+            "type": "straight_right",
+            "eventId": "boxing-straight-right-22899c104a9e",
+            "sourceEventIds": [
+              "note-006"
+            ],
+            "spatialTarget": {
+              "targetCell": 10,
+              "acceptedSubcells": [
+                35,
+                36,
+                37,
+                43,
+                44,
+                45
+              ],
+              "sourceCell": -1,
+              "qualificationMs": 100,
+              "semanticQualification": "straight"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 41,
+            "type": "straight_left",
+            "eventId": "boxing-straight-left-74838b991542",
+            "sourceEventIds": [
+              "note-007"
+            ],
+            "spatialTarget": {
+              "targetCell": 9,
+              "acceptedSubcells": [
+                34,
+                35,
+                36,
+                42,
+                43,
+                44
+              ],
+              "sourceCell": -1,
+              "qualificationMs": 100,
+              "semanticQualification": "straight"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 45,
+            "type": "straight_right",
+            "eventId": "boxing-straight-right-07ee80890435",
+            "sourceEventIds": [
+              "note-008"
+            ],
+            "spatialTarget": {
+              "targetCell": 10,
+              "acceptedSubcells": [
+                35,
+                36,
+                37,
+                43,
+                44,
+                45
+              ],
+              "sourceCell": -1,
+              "qualificationMs": 100,
+              "semanticQualification": "straight"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 49,
+            "type": "straight_left",
+            "eventId": "boxing-straight-left-7bf92c910283",
+            "sourceEventIds": [
+              "note-009"
+            ],
+            "spatialTarget": {
+              "targetCell": 9,
+              "acceptedSubcells": [
+                34,
+                35,
+                36,
+                42,
+                43,
+                44
+              ],
+              "sourceCell": -1,
+              "qualificationMs": 100,
+              "semanticQualification": "straight"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 53,
+            "type": "hook_right",
+            "eventId": "boxing-hook-right-0bc6b6197c6a",
+            "sourceEventIds": [
+              "note-010"
+            ],
+            "spatialTarget": {
+              "targetCell": 9,
+              "acceptedSubcells": [
+                34,
+                35,
+                42,
+                43
+              ],
+              "sourceCell": 10,
+              "entryDirection": "left"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 55,
+            "type": "hook_left",
+            "eventId": "boxing-hook-left-47e5716060b4",
+            "sourceEventIds": [
+              "note-011"
+            ],
+            "spatialTarget": {
+              "targetCell": 10,
+              "acceptedSubcells": [
+                36,
+                37,
+                44,
+                45
+              ],
+              "sourceCell": 9,
+              "entryDirection": "right"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          }
+        ]
+      },
+      {
+        "schemaId": "aerobeat.chart.boxing.v1",
+        "schemaVersion": 1,
+        "recordVersion": 1,
+        "chartId": "ab-chart-3c9d-boxing-easy-spatial-grid-cut-family",
+        "chartName": "3c9d Easy Boxing - Spatial Grid / Cut Family",
+        "mode": "boxing",
+        "difficulty": "Easy",
+        "prototype": {
+          "contractId": "aerobeat.boxing.prototype.v1",
+          "recipeId": "cut_family_source_height_v1",
+          "recipeVersion": "1.0.0",
+          "rulesetId": "boxing_spatial_grid_v1",
+          "rulesetVersion": "1.0.0",
+          "sourceHash": "sha256:b00ddedd0d3c17ca07953a958d5fbdcee95c54c447c43f722813c51e8e9837aa",
+          "recipeHash": "sha256:49dd15612012e21d1d16ffdeb0f8d4f76bf5947d3ea623c83796c29ca250b2e3",
+          "rulesetHash": "sha256:8dbef6bf1844773b20723d7fd1397026b2824addf7586036815b5facb77e77fe",
+          "contentHash": "sha256:31c53c95e349b23c31b5bd7e7fed858d4f616826faea23d1021849244dd9ab48",
+          "modifiers": [],
+          "regenerationRequiredFor": [
+            "punchMinSpacingMs",
+            "reachSubcellsPerBeat",
+            "familyBalance",
+            "guardRelocation"
+          ]
+        },
+        "beats": [
+          {
+            "start": 21,
+            "type": "straight_right",
+            "eventId": "boxing-straight-right-e2dcccd1275a",
+            "sourceEventIds": [
+              "note-000"
+            ],
+            "spatialTarget": {
+              "targetCell": 10,
+              "acceptedSubcells": [
+                35,
+                36,
+                37,
+                43,
+                44,
+                45
+              ],
+              "sourceCell": -1,
+              "qualificationMs": 100,
+              "semanticQualification": "straight"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 25,
+            "type": "straight_left",
+            "eventId": "boxing-straight-left-186cdfa6cf7b",
+            "sourceEventIds": [
+              "note-001"
+            ],
+            "spatialTarget": {
+              "targetCell": 9,
+              "acceptedSubcells": [
+                34,
+                35,
+                36,
+                42,
+                43,
+                44
+              ],
+              "sourceCell": -1,
+              "qualificationMs": 100,
+              "semanticQualification": "straight"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 27,
+            "type": "straight_right",
+            "eventId": "boxing-straight-right-4d06164b48d6",
+            "sourceEventIds": [
+              "note-002"
+            ],
+            "spatialTarget": {
+              "targetCell": 10,
+              "acceptedSubcells": [
+                35,
+                36,
+                37,
+                43,
+                44,
+                45
+              ],
+              "sourceCell": -1,
+              "qualificationMs": 100,
+              "semanticQualification": "straight"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 28.5,
+            "type": "straight_left",
+            "eventId": "boxing-straight-left-279c861db48b",
+            "sourceEventIds": [
+              "note-003"
+            ],
+            "spatialTarget": {
+              "targetCell": 9,
+              "acceptedSubcells": [
+                34,
+                35,
+                36,
+                42,
+                43,
+                44
+              ],
+              "sourceCell": -1,
+              "qualificationMs": 100,
+              "semanticQualification": "straight"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 33,
+            "type": "hook_right",
+            "eventId": "boxing-hook-right-88c48590d24c",
+            "sourceEventIds": [
+              "note-004"
+            ],
+            "spatialTarget": {
+              "targetCell": 9,
+              "acceptedSubcells": [
+                34,
+                35,
+                42,
+                43
+              ],
+              "sourceCell": 10,
+              "entryDirection": "left"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 37,
+            "type": "hook_left",
+            "eventId": "boxing-hook-left-57ee97b68eef",
+            "sourceEventIds": [
+              "note-005"
+            ],
+            "spatialTarget": {
+              "targetCell": 10,
+              "acceptedSubcells": [
+                36,
+                37,
+                44,
+                45
+              ],
+              "sourceCell": 9,
+              "entryDirection": "right"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 39,
+            "type": "straight_right",
+            "eventId": "boxing-straight-right-22899c104a9e",
+            "sourceEventIds": [
+              "note-006"
+            ],
+            "spatialTarget": {
+              "targetCell": 10,
+              "acceptedSubcells": [
+                35,
+                36,
+                37,
+                43,
+                44,
+                45
+              ],
+              "sourceCell": -1,
+              "qualificationMs": 100,
+              "semanticQualification": "straight"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 41,
+            "type": "straight_left",
+            "eventId": "boxing-straight-left-74838b991542",
+            "sourceEventIds": [
+              "note-007"
+            ],
+            "spatialTarget": {
+              "targetCell": 9,
+              "acceptedSubcells": [
+                34,
+                35,
+                36,
+                42,
+                43,
+                44
+              ],
+              "sourceCell": -1,
+              "qualificationMs": 100,
+              "semanticQualification": "straight"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 45,
+            "type": "straight_right",
+            "eventId": "boxing-straight-right-07ee80890435",
+            "sourceEventIds": [
+              "note-008"
+            ],
+            "spatialTarget": {
+              "targetCell": 10,
+              "acceptedSubcells": [
+                35,
+                36,
+                37,
+                43,
+                44,
+                45
+              ],
+              "sourceCell": -1,
+              "qualificationMs": 100,
+              "semanticQualification": "straight"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 49,
+            "type": "straight_left",
+            "eventId": "boxing-straight-left-7bf92c910283",
+            "sourceEventIds": [
+              "note-009"
+            ],
+            "spatialTarget": {
+              "targetCell": 9,
+              "acceptedSubcells": [
+                34,
+                35,
+                36,
+                42,
+                43,
+                44
+              ],
+              "sourceCell": -1,
+              "qualificationMs": 100,
+              "semanticQualification": "straight"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 53,
+            "type": "hook_right",
+            "eventId": "boxing-hook-right-0bc6b6197c6a",
+            "sourceEventIds": [
+              "note-010"
+            ],
+            "spatialTarget": {
+              "targetCell": 9,
+              "acceptedSubcells": [
+                34,
+                35,
+                42,
+                43
+              ],
+              "sourceCell": 10,
+              "entryDirection": "left"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          },
+          {
+            "start": 55,
+            "type": "hook_left",
+            "eventId": "boxing-hook-left-47e5716060b4",
+            "sourceEventIds": [
+              "note-011"
+            ],
+            "spatialTarget": {
+              "targetCell": 10,
+              "acceptedSubcells": [
+                36,
+                37,
+                44,
+                45
+              ],
+              "sourceCell": 9,
+              "entryDirection": "right"
+            },
+            "timingWindowMs": 180,
+            "evidenceFreshnessMs": 150
+          }
+        ]
+      },
+      {
+        "schemaId": "aerobeat.chart.flow.v5",
+        "schemaVersion": 5,
+        "recordVersion": 2,
+        "rulesetId": "flow_grid_v2",
+        "chartId": "ab-chart-3c9d-flow-easy",
+        "chartName": "3c9d Easy Flow",
+        "mode": "flow",
+        "difficulty": "Easy",
+        "beats": [
+          {
+            "start": 21,
+            "type": "note",
+            "hand": "right",
+            "placement": 11,
+            "requiresDirection": true,
+            "angleOffset": 0,
+            "direction": 1
+          },
+          {
+            "start": 25,
+            "type": "note",
+            "hand": "left",
+            "placement": 8,
+            "requiresDirection": true,
+            "angleOffset": 0,
+            "direction": 1
+          },
+          {
+            "start": 27,
+            "type": "note",
+            "hand": "right",
+            "placement": 10,
+            "requiresDirection": true,
+            "angleOffset": 0,
+            "direction": 1
+          },
+          {
+            "start": 28.5,
+            "type": "note",
+            "hand": "left",
+            "placement": 9,
+            "requiresDirection": true,
+            "angleOffset": 0,
+            "direction": 1
+          },
+          {
+            "start": 33,
+            "type": "note",
+            "hand": "right",
+            "placement": 11,
+            "requiresDirection": true,
+            "angleOffset": 0,
+            "direction": 3
+          },
+          {
+            "start": 37,
+            "type": "note",
+            "hand": "left",
+            "placement": 8,
+            "requiresDirection": true,
+            "angleOffset": 0,
+            "direction": 2
+          },
+          {
+            "start": 39,
+            "type": "note",
+            "hand": "right",
+            "placement": 11,
+            "requiresDirection": true,
+            "angleOffset": 0,
+            "direction": 1
+          },
+          {
+            "start": 41,
+            "type": "note",
+            "hand": "left",
+            "placement": 8,
+            "requiresDirection": true,
+            "angleOffset": 0,
+            "direction": 1
+          },
+          {
+            "start": 45,
+            "type": "note",
+            "hand": "right",
+            "placement": 10,
+            "requiresDirection": true,
+            "angleOffset": 0,
+            "direction": 1
+          },
+          {
+            "start": 49,
+            "type": "note",
+            "hand": "left",
+            "placement": 9,
+            "requiresDirection": true,
+            "angleOffset": 0,
+            "direction": 1
+          },
+          {
+            "start": 53,
+            "type": "note",
+            "hand": "right",
+            "placement": 11,
+            "requiresDirection": true,
+            "angleOffset": 0,
+            "direction": 3
+          },
+          {
+            "start": 55,
+            "type": "note",
+            "hand": "left",
+            "placement": 8,
+            "requiresDirection": true,
+            "angleOffset": 0,
+            "direction": 2
+          }
+        ],
+        "rulesetVariants": [
+          "flow_grid_v2",
+          "flow_colliders_v1"
+        ],
+        "notePalette": null,
+        "contentHash": "sha256:329bf3af3435f309670a307748f70585cf4be15372d4a7b54a658fa28cfd6145"
+      }
+    ],
+    "sets": [
+      {
+        "schemaId": "aerobeat.set.v1",
+        "schemaVersion": 1,
+        "recordVersion": 1,
+        "setId": "ab-set-3c9d-boxing-easy-semantic-track-row-family",
+        "setName": "3c9d Easy Boxing",
+        "songId": "ab-song-3c9d",
+        "chartId": "ab-chart-3c9d-boxing-easy-semantic-track-row-family"
+      },
+      {
+        "schemaId": "aerobeat.set.v1",
+        "schemaVersion": 1,
+        "recordVersion": 1,
+        "setId": "ab-set-3c9d-boxing-easy-spatial-grid-row-family",
+        "setName": "3c9d Easy Boxing",
+        "songId": "ab-song-3c9d",
+        "chartId": "ab-chart-3c9d-boxing-easy-spatial-grid-row-family"
+      },
+      {
+        "schemaId": "aerobeat.set.v1",
+        "schemaVersion": 1,
+        "recordVersion": 1,
+        "setId": "ab-set-3c9d-boxing-easy-semantic-track-cut-family",
+        "setName": "3c9d Easy Boxing",
+        "songId": "ab-song-3c9d",
+        "chartId": "ab-chart-3c9d-boxing-easy-semantic-track-cut-family"
+      },
+      {
+        "schemaId": "aerobeat.set.v1",
+        "schemaVersion": 1,
+        "recordVersion": 1,
+        "setId": "ab-set-3c9d-boxing-easy-spatial-grid-cut-family",
+        "setName": "3c9d Easy Boxing",
+        "songId": "ab-song-3c9d",
+        "chartId": "ab-chart-3c9d-boxing-easy-spatial-grid-cut-family"
+      },
+      {
+        "schemaId": "aerobeat.set.v1",
+        "schemaVersion": 1,
+        "recordVersion": 1,
+        "setId": "ab-set-3c9d-flow-easy",
+        "setName": "3c9d Easy Flow",
+        "songId": "ab-song-3c9d",
+        "chartId": "ab-chart-3c9d-flow-easy"
+      }
+    ],
+    "recipeDefinitions": [
+      {
+        "contractId": "aerobeat.boxing.prototype.v1",
+        "recipeId": "row_family_balanced_height_v1",
+        "version": "1.0.0",
+        "label": "Row Family / Balanced Height",
+        "familyRule": {
+          "top": "uppercut",
+          "middle": "straight",
+          "bottom": "hook"
+        },
+        "heightRule": "balance_generated_rows",
+        "punchMinSpacingMs": 360,
+        "guardTimingWindowMs": 180,
+        "obstacleTimingWindowMs": 180,
+        "freshnessMs": 150,
+        "straightQualificationMs": 100,
+        "reachSubcellsPerBeat": {
+          "Easy": 3,
+          "Normal": 3.5,
+          "Hard": 4,
+          "Expert": 5,
+          "ExpertPlus": 6
+        },
+        "initialWristCells": {
+          "left": 5,
+          "right": 6
+        }
+      },
+      {
+        "contractId": "aerobeat.boxing.prototype.v1",
+        "recipeId": "cut_family_source_height_v1",
+        "version": "1.0.0",
+        "label": "Cut Family / Source Height",
+        "familyRule": {
+          "up": "uppercut",
+          "horizontal": "hook",
+          "other": "straight"
+        },
+        "heightRule": "prefer_source_row_promote_bottom_uppercut",
+        "normalizeOutwardHooks": true,
+        "punchMinSpacingMs": 360,
+        "guardTimingWindowMs": 180,
+        "obstacleTimingWindowMs": 180,
+        "freshnessMs": 150,
+        "straightQualificationMs": 100,
+        "reachSubcellsPerBeat": {
+          "Easy": 3,
+          "Normal": 3.5,
+          "Hard": 4,
+          "Expert": 5,
+          "ExpertPlus": 6
+        },
+        "initialWristCells": {
+          "left": 5,
+          "right": 6
+        }
+      }
+    ],
+    "rulesetDefinitions": [
+      {
+        "contractId": "aerobeat.boxing.prototype.v1",
+        "rulesetId": "boxing_semantic_track_v1",
+        "version": "1.0.0",
+        "timingWindowMs": 180,
+        "evidenceFreshnessMs": 150,
+        "straightQualificationMs": 100,
+        "hookAndUppercutQualification": "target-cell-and-cardinal-direction",
+        "semanticClassifiers": "authoritative"
+      },
+      {
+        "contractId": "aerobeat.boxing.prototype.v1",
+        "rulesetId": "boxing_spatial_grid_v1",
+        "version": "1.0.0",
+        "timingWindowMs": 180,
+        "evidenceFreshnessMs": 150,
+        "straightQualificationMs": 100,
+        "hookAndUppercutQualification": "target-cell-and-cardinal-direction",
+        "semanticClassifiers": "shadow-only",
+        "subgrid": {
+          "columns": 8,
+          "rows": 6,
+          "cellOrder": "top-left-row-major"
+        }
+      }
+    ],
+    "conversionTrace": {
+      "notePalette": null,
+      "spawnTiming": {
+        "schema": "aerobeat/beatsaber_spawn_timing",
+        "version": 1,
+        "algorithm": "beatsaber_core_hjd_v1",
+        "maxHalfJumpDistance": 17.999,
+        "startHalfJumpDurationBeats": 4,
+        "minimumHalfJumpDurationBeats": 0.25,
+        "bpm": 120,
+        "noteJumpMovementSpeed": 10,
+        "noteJumpStartBeatOffset": 1,
+        "halfJumpDurationBeats": 3,
+        "reactionTimeMs": 1500,
+        "jumpDistanceMeters": 30
+      },
+      "boxing": [
+        {
+          "chartId": "ab-chart-3c9d-boxing-easy-semantic-track-row-family",
+          "difficulty": "Easy",
+          "bpm": 120,
+          "recipeId": "row_family_balanced_height_v1",
+          "rulesetId": "boxing_semantic_track_v1",
+          "sourceHash": "sha256:b00ddedd0d3c17ca07953a958d5fbdcee95c54c447c43f722813c51e8e9837aa",
+          "contentHash": "sha256:772952e230733850ec46fd654071fdfb611ec3b07bb0c7b8027665cfb966c501",
+          "sourceInfoFormat": "v2",
+          "sourceInfoVersion": "2.1.0",
+          "sourceInfoHash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "sourceDifficultyPath": "Easy.dat",
+          "sourceBeatmapFormat": "v3",
+          "sourceBeatmapVersion": "3.3.0",
+          "sourceDifficultyHash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "spawnTiming": {
+            "schema": "aerobeat/beatsaber_spawn_timing",
+            "version": 1,
+            "algorithm": "beatsaber_core_hjd_v1",
+            "maxHalfJumpDistance": 17.999,
+            "startHalfJumpDurationBeats": 4,
+            "minimumHalfJumpDurationBeats": 0.25,
+            "bpm": 120,
+            "noteJumpMovementSpeed": 10,
+            "noteJumpStartBeatOffset": 1,
+            "halfJumpDurationBeats": 3,
+            "reactionTimeMs": 1500,
+            "jumpDistanceMeters": 30
+          },
+          "optimizer": {
+            "priorityOrder": [
+              "retained_punches",
+              "hand_alternation",
+              "family_balance",
+              "source_order",
+              "stable_event_id"
+            ],
+            "punchMinSpacingMs": 360,
+            "selectedStableIds": [
+              "note-000",
+              "note-001",
+              "note-002",
+              "note-003",
+              "note-004",
+              "note-005",
+              "note-006",
+              "note-007",
+              "note-008",
+              "note-009",
+              "note-010",
+              "note-011"
+            ]
+          },
+          "events": [
+            {
+              "sourceEventIds": [
+                "note-000"
+              ],
+              "eventId": "boxing-hook-right-bae9d2638d82",
+              "start": 21,
+              "action": "emit",
+              "kind": "punch",
+              "family": "hook",
+              "hand": "right",
+              "sourceDirection": 1,
+              "generatedDirection": "left",
+              "target": {
+                "targetCell": 1,
+                "acceptedSubcells": [
+                  2,
+                  3,
+                  10,
+                  11
+                ],
+                "sourceCell": 2,
+                "entryDirection": "left"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-001"
+              ],
+              "eventId": "boxing-hook-left-67ad2b5feaee",
+              "start": 25,
+              "action": "emit",
+              "kind": "punch",
+              "family": "hook",
+              "hand": "left",
+              "sourceDirection": 1,
+              "generatedDirection": "right",
+              "target": {
+                "targetCell": 6,
+                "acceptedSubcells": [
+                  20,
+                  21,
+                  28,
+                  29
+                ],
+                "sourceCell": 5,
+                "entryDirection": "right"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-002"
+              ],
+              "eventId": "boxing-hook-right-89a72149e99b",
+              "start": 27,
+              "action": "emit",
+              "kind": "punch",
+              "family": "hook",
+              "hand": "right",
+              "sourceDirection": 1,
+              "generatedDirection": "left",
+              "target": {
+                "targetCell": 9,
+                "acceptedSubcells": [
+                  34,
+                  35,
+                  42,
+                  43
+                ],
+                "sourceCell": 10,
+                "entryDirection": "left"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-003"
+              ],
+              "eventId": "boxing-hook-left-5e0080146e6e",
+              "start": 28.5,
+              "action": "emit",
+              "kind": "punch",
+              "family": "hook",
+              "hand": "left",
+              "sourceDirection": 1,
+              "generatedDirection": "right",
+              "target": {
+                "targetCell": 2,
+                "acceptedSubcells": [
+                  4,
+                  5,
+                  12,
+                  13
+                ],
+                "sourceCell": 1,
+                "entryDirection": "right"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-004"
+              ],
+              "eventId": "boxing-hook-right-1450f68d9f23",
+              "start": 33,
+              "action": "emit",
+              "kind": "punch",
+              "family": "hook",
+              "hand": "right",
+              "sourceDirection": 3,
+              "generatedDirection": "left",
+              "target": {
+                "targetCell": 5,
+                "acceptedSubcells": [
+                  18,
+                  19,
+                  26,
+                  27
+                ],
+                "sourceCell": 6,
+                "entryDirection": "left"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-005"
+              ],
+              "eventId": "boxing-hook-left-416620ec4eee",
+              "start": 37,
+              "action": "emit",
+              "kind": "punch",
+              "family": "hook",
+              "hand": "left",
+              "sourceDirection": 2,
+              "generatedDirection": "right",
+              "target": {
+                "targetCell": 10,
+                "acceptedSubcells": [
+                  36,
+                  37,
+                  44,
+                  45
+                ],
+                "sourceCell": 9,
+                "entryDirection": "right"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-006"
+              ],
+              "eventId": "boxing-hook-right-e77564a2e978",
+              "start": 39,
+              "action": "emit",
+              "kind": "punch",
+              "family": "hook",
+              "hand": "right",
+              "sourceDirection": 1,
+              "generatedDirection": "left",
+              "target": {
+                "targetCell": 1,
+                "acceptedSubcells": [
+                  2,
+                  3,
+                  10,
+                  11
+                ],
+                "sourceCell": 2,
+                "entryDirection": "left"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-007"
+              ],
+              "eventId": "boxing-hook-left-42790b3651b8",
+              "start": 41,
+              "action": "emit",
+              "kind": "punch",
+              "family": "hook",
+              "hand": "left",
+              "sourceDirection": 1,
+              "generatedDirection": "right",
+              "target": {
+                "targetCell": 6,
+                "acceptedSubcells": [
+                  20,
+                  21,
+                  28,
+                  29
+                ],
+                "sourceCell": 5,
+                "entryDirection": "right"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-008"
+              ],
+              "eventId": "boxing-hook-right-6d02aa463f69",
+              "start": 45,
+              "action": "emit",
+              "kind": "punch",
+              "family": "hook",
+              "hand": "right",
+              "sourceDirection": 1,
+              "generatedDirection": "left",
+              "target": {
+                "targetCell": 9,
+                "acceptedSubcells": [
+                  34,
+                  35,
+                  42,
+                  43
+                ],
+                "sourceCell": 10,
+                "entryDirection": "left"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-009"
+              ],
+              "eventId": "boxing-hook-left-70e04ee24539",
+              "start": 49,
+              "action": "emit",
+              "kind": "punch",
+              "family": "hook",
+              "hand": "left",
+              "sourceDirection": 1,
+              "generatedDirection": "right",
+              "target": {
+                "targetCell": 2,
+                "acceptedSubcells": [
+                  4,
+                  5,
+                  12,
+                  13
+                ],
+                "sourceCell": 1,
+                "entryDirection": "right"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-010"
+              ],
+              "eventId": "boxing-hook-right-e160a7ec410f",
+              "start": 53,
+              "action": "emit",
+              "kind": "punch",
+              "family": "hook",
+              "hand": "right",
+              "sourceDirection": 3,
+              "generatedDirection": "left",
+              "target": {
+                "targetCell": 5,
+                "acceptedSubcells": [
+                  18,
+                  19,
+                  26,
+                  27
+                ],
+                "sourceCell": 6,
+                "entryDirection": "left"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-011"
+              ],
+              "eventId": "boxing-hook-left-d5719e76a0e5",
+              "start": 55,
+              "action": "emit",
+              "kind": "punch",
+              "family": "hook",
+              "hand": "left",
+              "sourceDirection": 2,
+              "generatedDirection": "right",
+              "target": {
+                "targetCell": 10,
+                "acceptedSubcells": [
+                  36,
+                  37,
+                  44,
+                  45
+                ],
+                "sourceCell": 9,
+                "entryDirection": "right"
+              }
+            }
+          ]
+        },
+        {
+          "chartId": "ab-chart-3c9d-boxing-easy-spatial-grid-row-family",
+          "difficulty": "Easy",
+          "bpm": 120,
+          "recipeId": "row_family_balanced_height_v1",
+          "rulesetId": "boxing_spatial_grid_v1",
+          "sourceHash": "sha256:b00ddedd0d3c17ca07953a958d5fbdcee95c54c447c43f722813c51e8e9837aa",
+          "contentHash": "sha256:360fb1a04f91a32cc6c42f397e46fb3ec62d3433d948ecf404f5f024d80f22f6",
+          "sourceInfoFormat": "v2",
+          "sourceInfoVersion": "2.1.0",
+          "sourceInfoHash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "sourceDifficultyPath": "Easy.dat",
+          "sourceBeatmapFormat": "v3",
+          "sourceBeatmapVersion": "3.3.0",
+          "sourceDifficultyHash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "spawnTiming": {
+            "schema": "aerobeat/beatsaber_spawn_timing",
+            "version": 1,
+            "algorithm": "beatsaber_core_hjd_v1",
+            "maxHalfJumpDistance": 17.999,
+            "startHalfJumpDurationBeats": 4,
+            "minimumHalfJumpDurationBeats": 0.25,
+            "bpm": 120,
+            "noteJumpMovementSpeed": 10,
+            "noteJumpStartBeatOffset": 1,
+            "halfJumpDurationBeats": 3,
+            "reactionTimeMs": 1500,
+            "jumpDistanceMeters": 30
+          },
+          "optimizer": {
+            "priorityOrder": [
+              "retained_punches",
+              "hand_alternation",
+              "family_balance",
+              "source_order",
+              "stable_event_id"
+            ],
+            "punchMinSpacingMs": 360,
+            "selectedStableIds": [
+              "note-000",
+              "note-001",
+              "note-002",
+              "note-003",
+              "note-004",
+              "note-005",
+              "note-006",
+              "note-007",
+              "note-008",
+              "note-009",
+              "note-010",
+              "note-011"
+            ]
+          },
+          "events": [
+            {
+              "sourceEventIds": [
+                "note-000"
+              ],
+              "eventId": "boxing-hook-right-bae9d2638d82",
+              "start": 21,
+              "action": "emit",
+              "kind": "punch",
+              "family": "hook",
+              "hand": "right",
+              "sourceDirection": 1,
+              "generatedDirection": "left",
+              "target": {
+                "targetCell": 1,
+                "acceptedSubcells": [
+                  2,
+                  3,
+                  10,
+                  11
+                ],
+                "sourceCell": 2,
+                "entryDirection": "left"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-001"
+              ],
+              "eventId": "boxing-hook-left-67ad2b5feaee",
+              "start": 25,
+              "action": "emit",
+              "kind": "punch",
+              "family": "hook",
+              "hand": "left",
+              "sourceDirection": 1,
+              "generatedDirection": "right",
+              "target": {
+                "targetCell": 6,
+                "acceptedSubcells": [
+                  20,
+                  21,
+                  28,
+                  29
+                ],
+                "sourceCell": 5,
+                "entryDirection": "right"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-002"
+              ],
+              "eventId": "boxing-hook-right-89a72149e99b",
+              "start": 27,
+              "action": "emit",
+              "kind": "punch",
+              "family": "hook",
+              "hand": "right",
+              "sourceDirection": 1,
+              "generatedDirection": "left",
+              "target": {
+                "targetCell": 9,
+                "acceptedSubcells": [
+                  34,
+                  35,
+                  42,
+                  43
+                ],
+                "sourceCell": 10,
+                "entryDirection": "left"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-003"
+              ],
+              "eventId": "boxing-hook-left-5e0080146e6e",
+              "start": 28.5,
+              "action": "emit",
+              "kind": "punch",
+              "family": "hook",
+              "hand": "left",
+              "sourceDirection": 1,
+              "generatedDirection": "right",
+              "target": {
+                "targetCell": 2,
+                "acceptedSubcells": [
+                  4,
+                  5,
+                  12,
+                  13
+                ],
+                "sourceCell": 1,
+                "entryDirection": "right"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-004"
+              ],
+              "eventId": "boxing-hook-right-1450f68d9f23",
+              "start": 33,
+              "action": "emit",
+              "kind": "punch",
+              "family": "hook",
+              "hand": "right",
+              "sourceDirection": 3,
+              "generatedDirection": "left",
+              "target": {
+                "targetCell": 5,
+                "acceptedSubcells": [
+                  18,
+                  19,
+                  26,
+                  27
+                ],
+                "sourceCell": 6,
+                "entryDirection": "left"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-005"
+              ],
+              "eventId": "boxing-hook-left-416620ec4eee",
+              "start": 37,
+              "action": "emit",
+              "kind": "punch",
+              "family": "hook",
+              "hand": "left",
+              "sourceDirection": 2,
+              "generatedDirection": "right",
+              "target": {
+                "targetCell": 10,
+                "acceptedSubcells": [
+                  36,
+                  37,
+                  44,
+                  45
+                ],
+                "sourceCell": 9,
+                "entryDirection": "right"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-006"
+              ],
+              "eventId": "boxing-hook-right-e77564a2e978",
+              "start": 39,
+              "action": "emit",
+              "kind": "punch",
+              "family": "hook",
+              "hand": "right",
+              "sourceDirection": 1,
+              "generatedDirection": "left",
+              "target": {
+                "targetCell": 1,
+                "acceptedSubcells": [
+                  2,
+                  3,
+                  10,
+                  11
+                ],
+                "sourceCell": 2,
+                "entryDirection": "left"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-007"
+              ],
+              "eventId": "boxing-hook-left-42790b3651b8",
+              "start": 41,
+              "action": "emit",
+              "kind": "punch",
+              "family": "hook",
+              "hand": "left",
+              "sourceDirection": 1,
+              "generatedDirection": "right",
+              "target": {
+                "targetCell": 6,
+                "acceptedSubcells": [
+                  20,
+                  21,
+                  28,
+                  29
+                ],
+                "sourceCell": 5,
+                "entryDirection": "right"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-008"
+              ],
+              "eventId": "boxing-hook-right-6d02aa463f69",
+              "start": 45,
+              "action": "emit",
+              "kind": "punch",
+              "family": "hook",
+              "hand": "right",
+              "sourceDirection": 1,
+              "generatedDirection": "left",
+              "target": {
+                "targetCell": 9,
+                "acceptedSubcells": [
+                  34,
+                  35,
+                  42,
+                  43
+                ],
+                "sourceCell": 10,
+                "entryDirection": "left"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-009"
+              ],
+              "eventId": "boxing-hook-left-70e04ee24539",
+              "start": 49,
+              "action": "emit",
+              "kind": "punch",
+              "family": "hook",
+              "hand": "left",
+              "sourceDirection": 1,
+              "generatedDirection": "right",
+              "target": {
+                "targetCell": 2,
+                "acceptedSubcells": [
+                  4,
+                  5,
+                  12,
+                  13
+                ],
+                "sourceCell": 1,
+                "entryDirection": "right"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-010"
+              ],
+              "eventId": "boxing-hook-right-e160a7ec410f",
+              "start": 53,
+              "action": "emit",
+              "kind": "punch",
+              "family": "hook",
+              "hand": "right",
+              "sourceDirection": 3,
+              "generatedDirection": "left",
+              "target": {
+                "targetCell": 5,
+                "acceptedSubcells": [
+                  18,
+                  19,
+                  26,
+                  27
+                ],
+                "sourceCell": 6,
+                "entryDirection": "left"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-011"
+              ],
+              "eventId": "boxing-hook-left-d5719e76a0e5",
+              "start": 55,
+              "action": "emit",
+              "kind": "punch",
+              "family": "hook",
+              "hand": "left",
+              "sourceDirection": 2,
+              "generatedDirection": "right",
+              "target": {
+                "targetCell": 10,
+                "acceptedSubcells": [
+                  36,
+                  37,
+                  44,
+                  45
+                ],
+                "sourceCell": 9,
+                "entryDirection": "right"
+              }
+            }
+          ]
+        },
+        {
+          "chartId": "ab-chart-3c9d-boxing-easy-semantic-track-cut-family",
+          "difficulty": "Easy",
+          "bpm": 120,
+          "recipeId": "cut_family_source_height_v1",
+          "rulesetId": "boxing_semantic_track_v1",
+          "sourceHash": "sha256:b00ddedd0d3c17ca07953a958d5fbdcee95c54c447c43f722813c51e8e9837aa",
+          "contentHash": "sha256:9d6dd6cbaf6d6afe3eb21b951f83d1837482d923e29e4c4f95041cbe24e6e434",
+          "sourceInfoFormat": "v2",
+          "sourceInfoVersion": "2.1.0",
+          "sourceInfoHash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "sourceDifficultyPath": "Easy.dat",
+          "sourceBeatmapFormat": "v3",
+          "sourceBeatmapVersion": "3.3.0",
+          "sourceDifficultyHash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "spawnTiming": {
+            "schema": "aerobeat/beatsaber_spawn_timing",
+            "version": 1,
+            "algorithm": "beatsaber_core_hjd_v1",
+            "maxHalfJumpDistance": 17.999,
+            "startHalfJumpDurationBeats": 4,
+            "minimumHalfJumpDurationBeats": 0.25,
+            "bpm": 120,
+            "noteJumpMovementSpeed": 10,
+            "noteJumpStartBeatOffset": 1,
+            "halfJumpDurationBeats": 3,
+            "reactionTimeMs": 1500,
+            "jumpDistanceMeters": 30
+          },
+          "optimizer": {
+            "priorityOrder": [
+              "retained_punches",
+              "hand_alternation",
+              "family_balance",
+              "source_order",
+              "stable_event_id"
+            ],
+            "punchMinSpacingMs": 360,
+            "selectedStableIds": [
+              "note-000",
+              "note-001",
+              "note-002",
+              "note-003",
+              "note-004",
+              "note-005",
+              "note-006",
+              "note-007",
+              "note-008",
+              "note-009",
+              "note-010",
+              "note-011"
+            ]
+          },
+          "events": [
+            {
+              "sourceEventIds": [
+                "note-000"
+              ],
+              "eventId": "boxing-straight-right-e2dcccd1275a",
+              "start": 21,
+              "action": "emit",
+              "kind": "punch",
+              "family": "straight",
+              "hand": "right",
+              "sourceDirection": 1,
+              "generatedDirection": "semantic_straight",
+              "target": {
+                "targetCell": 10,
+                "acceptedSubcells": [
+                  35,
+                  36,
+                  37,
+                  43,
+                  44,
+                  45
+                ],
+                "sourceCell": -1,
+                "qualificationMs": 100,
+                "semanticQualification": "straight"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-001"
+              ],
+              "eventId": "boxing-straight-left-186cdfa6cf7b",
+              "start": 25,
+              "action": "emit",
+              "kind": "punch",
+              "family": "straight",
+              "hand": "left",
+              "sourceDirection": 1,
+              "generatedDirection": "semantic_straight",
+              "target": {
+                "targetCell": 9,
+                "acceptedSubcells": [
+                  34,
+                  35,
+                  36,
+                  42,
+                  43,
+                  44
+                ],
+                "sourceCell": -1,
+                "qualificationMs": 100,
+                "semanticQualification": "straight"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-002"
+              ],
+              "eventId": "boxing-straight-right-4d06164b48d6",
+              "start": 27,
+              "action": "emit",
+              "kind": "punch",
+              "family": "straight",
+              "hand": "right",
+              "sourceDirection": 1,
+              "generatedDirection": "semantic_straight",
+              "target": {
+                "targetCell": 10,
+                "acceptedSubcells": [
+                  35,
+                  36,
+                  37,
+                  43,
+                  44,
+                  45
+                ],
+                "sourceCell": -1,
+                "qualificationMs": 100,
+                "semanticQualification": "straight"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-003"
+              ],
+              "eventId": "boxing-straight-left-279c861db48b",
+              "start": 28.5,
+              "action": "emit",
+              "kind": "punch",
+              "family": "straight",
+              "hand": "left",
+              "sourceDirection": 1,
+              "generatedDirection": "semantic_straight",
+              "target": {
+                "targetCell": 9,
+                "acceptedSubcells": [
+                  34,
+                  35,
+                  36,
+                  42,
+                  43,
+                  44
+                ],
+                "sourceCell": -1,
+                "qualificationMs": 100,
+                "semanticQualification": "straight"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-004"
+              ],
+              "eventId": "boxing-hook-right-88c48590d24c",
+              "start": 33,
+              "action": "emit",
+              "kind": "punch",
+              "family": "hook",
+              "hand": "right",
+              "sourceDirection": 3,
+              "generatedDirection": "left",
+              "target": {
+                "targetCell": 9,
+                "acceptedSubcells": [
+                  34,
+                  35,
+                  42,
+                  43
+                ],
+                "sourceCell": 10,
+                "entryDirection": "left"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-005"
+              ],
+              "eventId": "boxing-hook-left-57ee97b68eef",
+              "start": 37,
+              "action": "emit",
+              "kind": "punch",
+              "family": "hook",
+              "hand": "left",
+              "sourceDirection": 2,
+              "generatedDirection": "right",
+              "target": {
+                "targetCell": 10,
+                "acceptedSubcells": [
+                  36,
+                  37,
+                  44,
+                  45
+                ],
+                "sourceCell": 9,
+                "entryDirection": "right"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-006"
+              ],
+              "eventId": "boxing-straight-right-22899c104a9e",
+              "start": 39,
+              "action": "emit",
+              "kind": "punch",
+              "family": "straight",
+              "hand": "right",
+              "sourceDirection": 1,
+              "generatedDirection": "semantic_straight",
+              "target": {
+                "targetCell": 10,
+                "acceptedSubcells": [
+                  35,
+                  36,
+                  37,
+                  43,
+                  44,
+                  45
+                ],
+                "sourceCell": -1,
+                "qualificationMs": 100,
+                "semanticQualification": "straight"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-007"
+              ],
+              "eventId": "boxing-straight-left-74838b991542",
+              "start": 41,
+              "action": "emit",
+              "kind": "punch",
+              "family": "straight",
+              "hand": "left",
+              "sourceDirection": 1,
+              "generatedDirection": "semantic_straight",
+              "target": {
+                "targetCell": 9,
+                "acceptedSubcells": [
+                  34,
+                  35,
+                  36,
+                  42,
+                  43,
+                  44
+                ],
+                "sourceCell": -1,
+                "qualificationMs": 100,
+                "semanticQualification": "straight"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-008"
+              ],
+              "eventId": "boxing-straight-right-07ee80890435",
+              "start": 45,
+              "action": "emit",
+              "kind": "punch",
+              "family": "straight",
+              "hand": "right",
+              "sourceDirection": 1,
+              "generatedDirection": "semantic_straight",
+              "target": {
+                "targetCell": 10,
+                "acceptedSubcells": [
+                  35,
+                  36,
+                  37,
+                  43,
+                  44,
+                  45
+                ],
+                "sourceCell": -1,
+                "qualificationMs": 100,
+                "semanticQualification": "straight"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-009"
+              ],
+              "eventId": "boxing-straight-left-7bf92c910283",
+              "start": 49,
+              "action": "emit",
+              "kind": "punch",
+              "family": "straight",
+              "hand": "left",
+              "sourceDirection": 1,
+              "generatedDirection": "semantic_straight",
+              "target": {
+                "targetCell": 9,
+                "acceptedSubcells": [
+                  34,
+                  35,
+                  36,
+                  42,
+                  43,
+                  44
+                ],
+                "sourceCell": -1,
+                "qualificationMs": 100,
+                "semanticQualification": "straight"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-010"
+              ],
+              "eventId": "boxing-hook-right-0bc6b6197c6a",
+              "start": 53,
+              "action": "emit",
+              "kind": "punch",
+              "family": "hook",
+              "hand": "right",
+              "sourceDirection": 3,
+              "generatedDirection": "left",
+              "target": {
+                "targetCell": 9,
+                "acceptedSubcells": [
+                  34,
+                  35,
+                  42,
+                  43
+                ],
+                "sourceCell": 10,
+                "entryDirection": "left"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-011"
+              ],
+              "eventId": "boxing-hook-left-47e5716060b4",
+              "start": 55,
+              "action": "emit",
+              "kind": "punch",
+              "family": "hook",
+              "hand": "left",
+              "sourceDirection": 2,
+              "generatedDirection": "right",
+              "target": {
+                "targetCell": 10,
+                "acceptedSubcells": [
+                  36,
+                  37,
+                  44,
+                  45
+                ],
+                "sourceCell": 9,
+                "entryDirection": "right"
+              }
+            }
+          ]
+        },
+        {
+          "chartId": "ab-chart-3c9d-boxing-easy-spatial-grid-cut-family",
+          "difficulty": "Easy",
+          "bpm": 120,
+          "recipeId": "cut_family_source_height_v1",
+          "rulesetId": "boxing_spatial_grid_v1",
+          "sourceHash": "sha256:b00ddedd0d3c17ca07953a958d5fbdcee95c54c447c43f722813c51e8e9837aa",
+          "contentHash": "sha256:31c53c95e349b23c31b5bd7e7fed858d4f616826faea23d1021849244dd9ab48",
+          "sourceInfoFormat": "v2",
+          "sourceInfoVersion": "2.1.0",
+          "sourceInfoHash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "sourceDifficultyPath": "Easy.dat",
+          "sourceBeatmapFormat": "v3",
+          "sourceBeatmapVersion": "3.3.0",
+          "sourceDifficultyHash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "spawnTiming": {
+            "schema": "aerobeat/beatsaber_spawn_timing",
+            "version": 1,
+            "algorithm": "beatsaber_core_hjd_v1",
+            "maxHalfJumpDistance": 17.999,
+            "startHalfJumpDurationBeats": 4,
+            "minimumHalfJumpDurationBeats": 0.25,
+            "bpm": 120,
+            "noteJumpMovementSpeed": 10,
+            "noteJumpStartBeatOffset": 1,
+            "halfJumpDurationBeats": 3,
+            "reactionTimeMs": 1500,
+            "jumpDistanceMeters": 30
+          },
+          "optimizer": {
+            "priorityOrder": [
+              "retained_punches",
+              "hand_alternation",
+              "family_balance",
+              "source_order",
+              "stable_event_id"
+            ],
+            "punchMinSpacingMs": 360,
+            "selectedStableIds": [
+              "note-000",
+              "note-001",
+              "note-002",
+              "note-003",
+              "note-004",
+              "note-005",
+              "note-006",
+              "note-007",
+              "note-008",
+              "note-009",
+              "note-010",
+              "note-011"
+            ]
+          },
+          "events": [
+            {
+              "sourceEventIds": [
+                "note-000"
+              ],
+              "eventId": "boxing-straight-right-e2dcccd1275a",
+              "start": 21,
+              "action": "emit",
+              "kind": "punch",
+              "family": "straight",
+              "hand": "right",
+              "sourceDirection": 1,
+              "generatedDirection": "semantic_straight",
+              "target": {
+                "targetCell": 10,
+                "acceptedSubcells": [
+                  35,
+                  36,
+                  37,
+                  43,
+                  44,
+                  45
+                ],
+                "sourceCell": -1,
+                "qualificationMs": 100,
+                "semanticQualification": "straight"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-001"
+              ],
+              "eventId": "boxing-straight-left-186cdfa6cf7b",
+              "start": 25,
+              "action": "emit",
+              "kind": "punch",
+              "family": "straight",
+              "hand": "left",
+              "sourceDirection": 1,
+              "generatedDirection": "semantic_straight",
+              "target": {
+                "targetCell": 9,
+                "acceptedSubcells": [
+                  34,
+                  35,
+                  36,
+                  42,
+                  43,
+                  44
+                ],
+                "sourceCell": -1,
+                "qualificationMs": 100,
+                "semanticQualification": "straight"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-002"
+              ],
+              "eventId": "boxing-straight-right-4d06164b48d6",
+              "start": 27,
+              "action": "emit",
+              "kind": "punch",
+              "family": "straight",
+              "hand": "right",
+              "sourceDirection": 1,
+              "generatedDirection": "semantic_straight",
+              "target": {
+                "targetCell": 10,
+                "acceptedSubcells": [
+                  35,
+                  36,
+                  37,
+                  43,
+                  44,
+                  45
+                ],
+                "sourceCell": -1,
+                "qualificationMs": 100,
+                "semanticQualification": "straight"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-003"
+              ],
+              "eventId": "boxing-straight-left-279c861db48b",
+              "start": 28.5,
+              "action": "emit",
+              "kind": "punch",
+              "family": "straight",
+              "hand": "left",
+              "sourceDirection": 1,
+              "generatedDirection": "semantic_straight",
+              "target": {
+                "targetCell": 9,
+                "acceptedSubcells": [
+                  34,
+                  35,
+                  36,
+                  42,
+                  43,
+                  44
+                ],
+                "sourceCell": -1,
+                "qualificationMs": 100,
+                "semanticQualification": "straight"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-004"
+              ],
+              "eventId": "boxing-hook-right-88c48590d24c",
+              "start": 33,
+              "action": "emit",
+              "kind": "punch",
+              "family": "hook",
+              "hand": "right",
+              "sourceDirection": 3,
+              "generatedDirection": "left",
+              "target": {
+                "targetCell": 9,
+                "acceptedSubcells": [
+                  34,
+                  35,
+                  42,
+                  43
+                ],
+                "sourceCell": 10,
+                "entryDirection": "left"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-005"
+              ],
+              "eventId": "boxing-hook-left-57ee97b68eef",
+              "start": 37,
+              "action": "emit",
+              "kind": "punch",
+              "family": "hook",
+              "hand": "left",
+              "sourceDirection": 2,
+              "generatedDirection": "right",
+              "target": {
+                "targetCell": 10,
+                "acceptedSubcells": [
+                  36,
+                  37,
+                  44,
+                  45
+                ],
+                "sourceCell": 9,
+                "entryDirection": "right"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-006"
+              ],
+              "eventId": "boxing-straight-right-22899c104a9e",
+              "start": 39,
+              "action": "emit",
+              "kind": "punch",
+              "family": "straight",
+              "hand": "right",
+              "sourceDirection": 1,
+              "generatedDirection": "semantic_straight",
+              "target": {
+                "targetCell": 10,
+                "acceptedSubcells": [
+                  35,
+                  36,
+                  37,
+                  43,
+                  44,
+                  45
+                ],
+                "sourceCell": -1,
+                "qualificationMs": 100,
+                "semanticQualification": "straight"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-007"
+              ],
+              "eventId": "boxing-straight-left-74838b991542",
+              "start": 41,
+              "action": "emit",
+              "kind": "punch",
+              "family": "straight",
+              "hand": "left",
+              "sourceDirection": 1,
+              "generatedDirection": "semantic_straight",
+              "target": {
+                "targetCell": 9,
+                "acceptedSubcells": [
+                  34,
+                  35,
+                  36,
+                  42,
+                  43,
+                  44
+                ],
+                "sourceCell": -1,
+                "qualificationMs": 100,
+                "semanticQualification": "straight"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-008"
+              ],
+              "eventId": "boxing-straight-right-07ee80890435",
+              "start": 45,
+              "action": "emit",
+              "kind": "punch",
+              "family": "straight",
+              "hand": "right",
+              "sourceDirection": 1,
+              "generatedDirection": "semantic_straight",
+              "target": {
+                "targetCell": 10,
+                "acceptedSubcells": [
+                  35,
+                  36,
+                  37,
+                  43,
+                  44,
+                  45
+                ],
+                "sourceCell": -1,
+                "qualificationMs": 100,
+                "semanticQualification": "straight"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-009"
+              ],
+              "eventId": "boxing-straight-left-7bf92c910283",
+              "start": 49,
+              "action": "emit",
+              "kind": "punch",
+              "family": "straight",
+              "hand": "left",
+              "sourceDirection": 1,
+              "generatedDirection": "semantic_straight",
+              "target": {
+                "targetCell": 9,
+                "acceptedSubcells": [
+                  34,
+                  35,
+                  36,
+                  42,
+                  43,
+                  44
+                ],
+                "sourceCell": -1,
+                "qualificationMs": 100,
+                "semanticQualification": "straight"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-010"
+              ],
+              "eventId": "boxing-hook-right-0bc6b6197c6a",
+              "start": 53,
+              "action": "emit",
+              "kind": "punch",
+              "family": "hook",
+              "hand": "right",
+              "sourceDirection": 3,
+              "generatedDirection": "left",
+              "target": {
+                "targetCell": 9,
+                "acceptedSubcells": [
+                  34,
+                  35,
+                  42,
+                  43
+                ],
+                "sourceCell": 10,
+                "entryDirection": "left"
+              }
+            },
+            {
+              "sourceEventIds": [
+                "note-011"
+              ],
+              "eventId": "boxing-hook-left-47e5716060b4",
+              "start": 55,
+              "action": "emit",
+              "kind": "punch",
+              "family": "hook",
+              "hand": "left",
+              "sourceDirection": 2,
+              "generatedDirection": "right",
+              "target": {
+                "targetCell": 10,
+                "acceptedSubcells": [
+                  36,
+                  37,
+                  44,
+                  45
+                ],
+                "sourceCell": 9,
+                "entryDirection": "right"
+              }
+            }
+          ]
+        }
+      ],
+      "flow": [
+        {
+          "difficulty": "Easy",
+          "obstacleContract": "normalized_obstacle_v2",
+          "events": [
+            {
+              "start": 21,
+              "sourceFamily": "note",
+              "result": {
+                "action": "emit",
+                "beat": {
+                  "start": 21,
+                  "type": "note",
+                  "hand": "right",
+                  "placement": 11,
+                  "requiresDirection": true,
+                  "angleOffset": 0,
+                  "direction": 1
+                },
+                "noteRef": "flow-note-000-right-3-21.000"
+              },
+              "note": {
+                "sourceIndex": 0,
+                "start": 21,
+                "x": 3,
+                "y": 0,
+                "cell": 3,
+                "hand": "right",
+                "direction": 1,
+                "angleOffset": 0,
+                "hasAngleOffset": false
+              }
+            },
+            {
+              "start": 25,
+              "sourceFamily": "note",
+              "result": {
+                "action": "emit",
+                "beat": {
+                  "start": 25,
+                  "type": "note",
+                  "hand": "left",
+                  "placement": 8,
+                  "requiresDirection": true,
+                  "angleOffset": 0,
+                  "direction": 1
+                },
+                "noteRef": "flow-note-001-left-0-25.000"
+              },
+              "note": {
+                "sourceIndex": 1,
+                "start": 25,
+                "x": 0,
+                "y": 0,
+                "cell": 0,
+                "hand": "left",
+                "direction": 1,
+                "angleOffset": 0,
+                "hasAngleOffset": false
+              }
+            },
+            {
+              "start": 27,
+              "sourceFamily": "note",
+              "result": {
+                "action": "emit",
+                "beat": {
+                  "start": 27,
+                  "type": "note",
+                  "hand": "right",
+                  "placement": 10,
+                  "requiresDirection": true,
+                  "angleOffset": 0,
+                  "direction": 1
+                },
+                "noteRef": "flow-note-002-right-2-27.000"
+              },
+              "note": {
+                "sourceIndex": 2,
+                "start": 27,
+                "x": 2,
+                "y": 0,
+                "cell": 2,
+                "hand": "right",
+                "direction": 1,
+                "angleOffset": 0,
+                "hasAngleOffset": false
+              }
+            },
+            {
+              "start": 28.5,
+              "sourceFamily": "note",
+              "result": {
+                "action": "emit",
+                "beat": {
+                  "start": 28.5,
+                  "type": "note",
+                  "hand": "left",
+                  "placement": 9,
+                  "requiresDirection": true,
+                  "angleOffset": 0,
+                  "direction": 1
+                },
+                "noteRef": "flow-note-003-left-1-28.500"
+              },
+              "note": {
+                "sourceIndex": 3,
+                "start": 28.5,
+                "x": 1,
+                "y": 0,
+                "cell": 1,
+                "hand": "left",
+                "direction": 1,
+                "angleOffset": 0,
+                "hasAngleOffset": false
+              }
+            },
+            {
+              "start": 33,
+              "sourceFamily": "note",
+              "result": {
+                "action": "emit",
+                "beat": {
+                  "start": 33,
+                  "type": "note",
+                  "hand": "right",
+                  "placement": 11,
+                  "requiresDirection": true,
+                  "angleOffset": 0,
+                  "direction": 3
+                },
+                "noteRef": "flow-note-004-right-3-33.000"
+              },
+              "note": {
+                "sourceIndex": 4,
+                "start": 33,
+                "x": 3,
+                "y": 0,
+                "cell": 3,
+                "hand": "right",
+                "direction": 3,
+                "angleOffset": 0,
+                "hasAngleOffset": false
+              }
+            },
+            {
+              "start": 37,
+              "sourceFamily": "note",
+              "result": {
+                "action": "emit",
+                "beat": {
+                  "start": 37,
+                  "type": "note",
+                  "hand": "left",
+                  "placement": 8,
+                  "requiresDirection": true,
+                  "angleOffset": 0,
+                  "direction": 2
+                },
+                "noteRef": "flow-note-005-left-0-37.000"
+              },
+              "note": {
+                "sourceIndex": 5,
+                "start": 37,
+                "x": 0,
+                "y": 0,
+                "cell": 0,
+                "hand": "left",
+                "direction": 2,
+                "angleOffset": 0,
+                "hasAngleOffset": false
+              }
+            },
+            {
+              "start": 39,
+              "sourceFamily": "note",
+              "result": {
+                "action": "emit",
+                "beat": {
+                  "start": 39,
+                  "type": "note",
+                  "hand": "right",
+                  "placement": 11,
+                  "requiresDirection": true,
+                  "angleOffset": 0,
+                  "direction": 1
+                },
+                "noteRef": "flow-note-006-right-3-39.000"
+              },
+              "note": {
+                "sourceIndex": 6,
+                "start": 39,
+                "x": 3,
+                "y": 0,
+                "cell": 3,
+                "hand": "right",
+                "direction": 1,
+                "angleOffset": 0,
+                "hasAngleOffset": false
+              }
+            },
+            {
+              "start": 41,
+              "sourceFamily": "note",
+              "result": {
+                "action": "emit",
+                "beat": {
+                  "start": 41,
+                  "type": "note",
+                  "hand": "left",
+                  "placement": 8,
+                  "requiresDirection": true,
+                  "angleOffset": 0,
+                  "direction": 1
+                },
+                "noteRef": "flow-note-007-left-0-41.000"
+              },
+              "note": {
+                "sourceIndex": 7,
+                "start": 41,
+                "x": 0,
+                "y": 0,
+                "cell": 0,
+                "hand": "left",
+                "direction": 1,
+                "angleOffset": 0,
+                "hasAngleOffset": false
+              }
+            },
+            {
+              "start": 45,
+              "sourceFamily": "note",
+              "result": {
+                "action": "emit",
+                "beat": {
+                  "start": 45,
+                  "type": "note",
+                  "hand": "right",
+                  "placement": 10,
+                  "requiresDirection": true,
+                  "angleOffset": 0,
+                  "direction": 1
+                },
+                "noteRef": "flow-note-008-right-2-45.000"
+              },
+              "note": {
+                "sourceIndex": 8,
+                "start": 45,
+                "x": 2,
+                "y": 0,
+                "cell": 2,
+                "hand": "right",
+                "direction": 1,
+                "angleOffset": 0,
+                "hasAngleOffset": false
+              }
+            },
+            {
+              "start": 49,
+              "sourceFamily": "note",
+              "result": {
+                "action": "emit",
+                "beat": {
+                  "start": 49,
+                  "type": "note",
+                  "hand": "left",
+                  "placement": 9,
+                  "requiresDirection": true,
+                  "angleOffset": 0,
+                  "direction": 1
+                },
+                "noteRef": "flow-note-009-left-1-49.000"
+              },
+              "note": {
+                "sourceIndex": 9,
+                "start": 49,
+                "x": 1,
+                "y": 0,
+                "cell": 1,
+                "hand": "left",
+                "direction": 1,
+                "angleOffset": 0,
+                "hasAngleOffset": false
+              }
+            },
+            {
+              "start": 53,
+              "sourceFamily": "note",
+              "result": {
+                "action": "emit",
+                "beat": {
+                  "start": 53,
+                  "type": "note",
+                  "hand": "right",
+                  "placement": 11,
+                  "requiresDirection": true,
+                  "angleOffset": 0,
+                  "direction": 3
+                },
+                "noteRef": "flow-note-010-right-3-53.000"
+              },
+              "note": {
+                "sourceIndex": 10,
+                "start": 53,
+                "x": 3,
+                "y": 0,
+                "cell": 3,
+                "hand": "right",
+                "direction": 3,
+                "angleOffset": 0,
+                "hasAngleOffset": false
+              }
+            },
+            {
+              "start": 55,
+              "sourceFamily": "note",
+              "result": {
+                "action": "emit",
+                "beat": {
+                  "start": 55,
+                  "type": "note",
+                  "hand": "left",
+                  "placement": 8,
+                  "requiresDirection": true,
+                  "angleOffset": 0,
+                  "direction": 2
+                },
+                "noteRef": "flow-note-011-left-0-55.000"
+              },
+              "note": {
+                "sourceIndex": 11,
+                "start": 55,
+                "x": 0,
+                "y": 0,
+                "cell": 0,
+                "hand": "left",
+                "direction": 2,
+                "angleOffset": 0,
+                "hasAngleOffset": false
+              }
+            }
+          ],
+          "rulesetId": "flow_grid_v2",
+          "rulesetVariants": [
+            "flow_grid_v2",
+            "flow_colliders_v1"
+          ],
+          "notePalette": null,
+          "contentHash": "sha256:329bf3af3435f309670a307748f70585cf4be15372d4a7b54a658fa28cfd6145",
+          "sourceHash": "sha256:b00ddedd0d3c17ca07953a958d5fbdcee95c54c447c43f722813c51e8e9837aa",
+          "sourceInfoFormat": "v2",
+          "sourceInfoVersion": "2.1.0",
+          "sourceInfoHash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "sourceDifficultyPath": "Easy.dat",
+          "sourceBeatmapFormat": "v3",
+          "sourceBeatmapVersion": "3.3.0",
+          "sourceDifficultyHash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "spawnTiming": {
+            "schema": "aerobeat/beatsaber_spawn_timing",
+            "version": 1,
+            "algorithm": "beatsaber_core_hjd_v1",
+            "maxHalfJumpDistance": 17.999,
+            "startHalfJumpDurationBeats": 4,
+            "minimumHalfJumpDurationBeats": 0.25,
+            "bpm": 120,
+            "noteJumpMovementSpeed": 10,
+            "noteJumpStartBeatOffset": 1,
+            "halfJumpDurationBeats": 3,
+            "reactionTimeMs": 1500,
+            "jumpDistanceMeters": 30
+          }
+        }
+      ]
+    },
+    "presentationSuggestion": null
+  }
+}

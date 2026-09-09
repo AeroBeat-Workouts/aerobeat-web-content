@@ -51,7 +51,7 @@ async function verifyContext(origin, secure) {
     try { await page.locator("aero-content-runtime[data-ready='true']").waitFor(); }
     catch (cause) { throw new Error(`Browser runtime did not become ready: ${consoleFailures.join(" | ") || (cause instanceof Error ? cause.message : "unknown failure")}`); }
     const runtime = page.locator("aero-content-runtime");
-    assert.match(await runtime.innerText(), /aero\.content\.library · implemented · 5 variants/u);
+    assert.match(await runtime.innerText(), /aero\.content\.library · implemented · 6 variants/u);
     assert.equal(await runtime.getAttribute("data-note-center-ms"), "700", "browser note timing includes anchor and stop at S <= beat");
     assert.equal(await runtime.getAttribute("data-interval-start-ms"), "1200", "browser interval start crosses the anchored stopped first tempo segment");
     assert.equal(await runtime.getAttribute("data-interval-end-ms"), "1700", "browser interval end uses the later tempo segment through the same mapper");
@@ -60,7 +60,7 @@ async function verifyContext(origin, secure) {
     const evidence = await page.evaluate(() => globalThis.__contentHashEvidence);
     assert.equal(evidence.isSecureContext, secure);
     assert.equal(evidence.subtleType, secure ? "object" : "undefined");
-    assert.deepEqual({ package: evidence.packageFailure, chart: evidence.chartFailure, asset: evidence.assetFailure }, { package: "package_hash_mismatch", chart: "chart_hash_mismatch", asset: "asset_hash_mismatch" });
+    assert.deepEqual({ package: evidence.packageFailure, staleV5: evidence.staleV5Failure, chart: evidence.chartFailure, asset: evidence.assetFailure }, { package: "package_hash_mismatch", staleV5: "flow_colliders_reimport_required", chart: "chart_hash_mismatch", asset: "asset_hash_mismatch" });
     assert.equal(evidence.persistedState, "ready");
     assert.equal(evidence.persistedAssetMatches, true);
     assert.equal(evidence.largeAssetBytes, 4 * 1024 * 1024);
@@ -69,6 +69,11 @@ async function verifyContext(origin, secure) {
     assert.equal(evidence.projectedNoteColor, "#FF0000");
     assert.equal(evidence.projectedObstacleHasColor, false);
     assert.equal(evidence.projectedBombHasColor, false);
+    assert.deepEqual(evidence.flowRulesets, ["flow_grid_v2", "flow_colliders_v1"]);
+    assert.equal(evidence.sharedFlowEventObjects, true);
+    assert.equal(evidence.distinctFlowScoreIdentities, true);
+    assert.deepEqual(evidence.collidersPolicy, [null, false, true]);
+    assert.equal(evidence.publicHasCollisionLeak, false);
     const expectedPunches=[["straight_left","#FF0000"],["straight_right","#808080"],["hook_left","#FF0000"],["hook_right","#808080"],["uppercut_left","#FF0000"],["uppercut_right","#808080"]],expectedFixed=[["guard",false],["squat",false],["weave_left",false],["weave_right",false]];
     assert.equal(evidence.boxingVariantEvidence.length,4);assert.deepEqual(evidence.boxingVariantEvidence.map((entry)=>entry.rulesetId),["boxing_semantic_track_v1","boxing_spatial_grid_v1","boxing_semantic_track_v1","boxing_spatial_grid_v1"]);for(const entry of evidence.boxingVariantEvidence){assert.deepEqual(entry.punchColors,expectedPunches,`six exact Boxing punches receive song colors in ${entry.rulesetId}`);assert.deepEqual(entry.fixed,expectedFixed,`guards and three obstacle types remain fixed in ${entry.rulesetId}`);assert.equal(entry.publicHasAppearance,false);}
     assert.equal(evidence.publicHasPaletteLeak, false);
