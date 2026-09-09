@@ -19,6 +19,7 @@ import { cloneFrozenData, compareCodePoints, dataError, dataProperty, diagnostic
 const internalRenderProjectionSymbol = Symbol.for("aerobeat.web-content.internal-render-projection");
 const internalTimingMapperSymbol = Symbol.for("aerobeat.web-content.internal-timing-mapper");
 const internalEffectivePaletteSymbol = Symbol.for("aerobeat.web-content.internal-effective-palette");
+const internalSpawnTimingSymbol = Symbol.for("aerobeat.web-content.internal-spawn-timing");
 const BOXING_PUNCH_HANDS=/** @type {Readonly<Record<string,"left"|"right">>} */(Object.freeze({straight_left:"left",straight_right:"right",hook_left:"left",hook_right:"right",uppercut_left:"left",uppercut_right:"right"}));
 
 /** @type {Readonly<Record<string, unknown>>} */
@@ -72,6 +73,8 @@ export function createAeroContentRuntime(options = {}) {
   let loadedBeatToTimelineMs = null;
   /** @type {import("@aerobeat/web-contracts").AeroEffectiveNotePalette | null} */
   let effectiveNotePalette = null;
+  /** @type {DataRecord | null} */
+  let spawnTiming = null;
   let packageId = null;
   let packageHash = null;
   let sourceSnapshot = null;
@@ -237,6 +240,12 @@ export function createAeroContentRuntime(options = {}) {
     writable: false,
     value: Object.freeze((/** @type {number} */ expectedGeneration) => !destroyed && snapshot.state === "ready" && expectedGeneration === generation && loadedPackage && effectiveNotePalette ? effectiveNotePalette : null)
   });
+  Object.defineProperty(serviceValue, internalSpawnTimingSymbol, {
+    configurable: false,
+    enumerable: false,
+    writable: false,
+    value: Object.freeze((/** @type {number} */ expectedGeneration) => !destroyed && snapshot.state === "ready" && expectedGeneration === generation && loadedPackage && spawnTiming ? spawnTiming : null)
+  });
   const service = Object.freeze(serviceValue);
   return service;
 
@@ -260,7 +269,7 @@ export function createAeroContentRuntime(options = {}) {
       const loadedAssets = await loadPackageAssets(declarations, { fetch: runtimeOptions.fetch, baseUrl: typeof raw.baseUrl === "string" ? raw.baseUrl : loadOptions.baseUrl, signal: localAbort.signal, timeoutMs: runtimeOptions.timeoutMs, maximumAssetBytes: runtimeOptions.maximumAssetBytes });
       checkCurrent(localGeneration, localAbort.signal);
       verifyPackageAudio(packageResult.song, loadedAssets);
-      loadedPackage = packageResult.package; loadedBeatToTimelineMs = packageResult.beatToTimelineMs; effectiveNotePalette = packageResult.effectiveNotePalette; packageId = packageResult.packageId; packageHash = packageResult.packageHash; contentLineage = packageResult.source; assets = loadedAssets;
+      loadedPackage = packageResult.package; loadedBeatToTimelineMs = packageResult.beatToTimelineMs; effectiveNotePalette = packageResult.effectiveNotePalette; spawnTiming = packageResult.spawnTiming; packageId = packageResult.packageId; packageHash = packageResult.packageHash; contentLineage = publicContentLineage(packageResult.source); assets = loadedAssets;
       variantById = new Map(packageResult.variants.map((variant) => [variant.variantId, variant])); composedVariants.clear();
       selectedVariant = packageResult.variants.find((variant) => variant.mode === "flow") ?? packageResult.variants[0] ?? null;
       setResolvedEvents(selectedVariant ? timelineFor(selectedVariant, requireTimingMapper()) : Object.freeze([]), selectedVariant);
@@ -289,7 +298,7 @@ export function createAeroContentRuntime(options = {}) {
     composedVariants.set(key, composed);
     return composed;
   }
-  function clearLoaded() { assets = []; variantById.clear(); composedVariants.clear(); selectedVariant = null; resolvedEvents = Object.freeze([]); renderEvents = Object.freeze([]); loadedPackage = null; loadedBeatToTimelineMs = null; effectiveNotePalette = null; packageId = null; packageHash = null; contentLineage = null; themeSnapshot = null; backgroundSnapshot = fallbackBackground(); playbackState = "idle"; playbackPositionMs = 0; judgedEventIds.clear(); activeEventIds.clear(); }
+  function clearLoaded() { assets = []; variantById.clear(); composedVariants.clear(); selectedVariant = null; resolvedEvents = Object.freeze([]); renderEvents = Object.freeze([]); loadedPackage = null; loadedBeatToTimelineMs = null; effectiveNotePalette = null; spawnTiming = null; packageId = null; packageHash = null; contentLineage = null; themeSnapshot = null; backgroundSnapshot = fallbackBackground(); playbackState = "idle"; playbackPositionMs = 0; judgedEventIds.clear(); activeEventIds.clear(); }
   /** @param {readonly DataRecord[]} events @param {RuntimeVariant | null} variant */
   function setResolvedEvents(events, variant) { resolvedEvents = events; renderEvents = variant ? projectRenderEvents(events, (event) => modeForEvent(event, variant), requireEffectivePalette()) : Object.freeze([]); }
   /** @param {DataRecord} event @param {RuntimeVariant} current @returns {"flow"|"boxing"|null} */
@@ -425,6 +434,8 @@ function normalizePathList(value) { if (!Array.isArray(value) || value.length > 
 /** @param {Promise<unknown>} promise @param {AbortSignal} signal */
 async function raceAbort(promise, signal) { if (signal.aborted) throw dataError("operation_aborted", "Content load was cancelled"); return new Promise((resolve, reject) => { const aborted = () => { cleanup(); reject(dataError("operation_aborted", "Content load was cancelled")); }; const cleanup = () => signal.removeEventListener("abort", aborted); signal.addEventListener("abort", aborted, { once: true }); promise.then((value) => { cleanup(); resolve(value); }, (cause) => { cleanup(); reject(cause); }); }); }
 
+/** @param {DataRecord} source */
+function publicContentLineage(source){const result=Object.create(null);for(const key of Reflect.ownKeys(source)){if(key==="spawnTiming")continue;const descriptor=Object.getOwnPropertyDescriptor(source,key);if(typeof key==="string"&&descriptor&&"value" in descriptor&&descriptor.enumerable)result[key]=descriptor.value;}return Object.freeze(result);}
 /** @param {RuntimeVariant} variant */
 function publicVariant(variant) { return Object.freeze({ variantId: variant.variantId, chartId: variant.chartId, mode: variant.mode, rulesetId: variant.rulesetId, recipeId: variant.recipeId, modifierIds: variant.modifierIds, ranked: variant.ranked, localOnly: variant.localOnly, mapHash: variant.mapHash, scoreIdentityHash: variant.scoreIdentityHash, provenance: variant.provenance }); }
 /** @param {RuntimeVariant} variant @param {(beat:number)=>number} beatToTimelineMs @returns {readonly DataRecord[]} */

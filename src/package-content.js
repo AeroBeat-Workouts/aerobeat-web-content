@@ -11,6 +11,7 @@ import {
   rulesetIds
 } from "@aerobeat/web-contracts";
 import { canonicalJson, cloneFrozenData, dataError, hasExactDataKeys, isPlainDataRecord, runtimePackageDataLimits, sha256Hex } from "./runtime-data.js";
+import { validateSpawnTiming } from "./spawn-timing.js";
 
 /** @typedef {Readonly<Record<string, unknown>>} DataRecord */
 /** @typedef {import("@aerobeat/web-contracts").AeroEffectiveNotePalette} AeroEffectiveNotePalette */
@@ -25,9 +26,8 @@ import { canonicalJson, cloneFrozenData, dataError, hasExactDataKeys, isPlainDat
 export async function validateRuntimePackage(packageValue, options = {}) {
   const packageRecord = /** @type {DataRecord} */ (cloneFrozenData(packageValue, runtimePackageDataLimits));
   requireString(packageRecord.schemaId, "package_schema_invalid");
-  if ((packageRecord.schemaId === "aerobeat.song-package.v1" && packageRecord.schemaVersion === 1) || (packageRecord.schemaId === "aerobeat.song-package.v2" && packageRecord.schemaVersion === 2)) throw dataError("flow_obstacle_reimport_required", "Prior-contract package requires reimport for normalized obstacle geometry");
-  if (packageRecord.schemaId === "aerobeat.song-package.v3" && packageRecord.schemaVersion === 3) throw dataError("note_palette_reimport_required", "Version 3 packages require reimport for authored note-palette integrity");
-  if (packageRecord.schemaId !== "aerobeat.song-package.v4" || packageRecord.schemaVersion !== 4 || packageRecord.packageVersion !== "4.0.0") throw dataError("package_schema_invalid", "Song package schema/version is unsupported");
+  if ([1,2,3,4].some((version)=>packageRecord.schemaId===`aerobeat.song-package.v${version}`&&packageRecord.schemaVersion===version)) throw dataError("spawn_timing_reimport_required", "Prior package versions require reimport for hash-bound source spawn timing");
+  if (packageRecord.schemaId !== "aerobeat.song-package.v5" || packageRecord.schemaVersion !== 5 || packageRecord.packageVersion !== "5.0.0") throw dataError("package_schema_invalid", "Song package schema/version is unsupported");
   const packageId = requireString(packageRecord.packageId, "package_identity_invalid");
   const songId = requireString(packageRecord.songId, "package_identity_invalid");
   const song = requireRecord(packageRecord.song, "song_invalid");
@@ -40,6 +40,8 @@ export async function validateRuntimePackage(packageValue, options = {}) {
   validatePaletteSourceBinding(notePalette, packageSource);
   const effectiveNotePalette = await createEffectivePalette(notePalette);
   const bpm = readBpm(song);
+  const spawnTiming = validateSpawnTiming(packageSource.spawnTiming, bpm);
+  validateSpawnTimingTrace(packageRecord.conversionTrace, spawnTiming);
   const charts = requireArray(packageRecord.charts, "charts_invalid");
   if (charts.length !== 5) throw dataError("chart_count_invalid", "Package must contain Flow plus exactly four Boxing prototype charts");
   const chartIds = new Set();
@@ -129,6 +131,7 @@ export async function validateRuntimePackage(packageValue, options = {}) {
     bpm,
     beatToTimelineMs,
     effectiveNotePalette,
+    spawnTiming,
     variants: Object.freeze(variants),
     source: isPlainDataRecord(packageRecord.source) ? packageRecord.source : Object.freeze(Object.create(null))
   });
@@ -414,6 +417,9 @@ function validateFlowPaletteReference(referenceValue, palette) {
   const reference = /** @type {DataRecord} */ (referenceValue);
   if (reference.source !== "package" || reference.paletteHash !== palette.paletteHash) throw dataError("flow_note_palette_mismatch", "Flow palette reference must bind the exact package palette hash");
 }
+
+/** @param {unknown} traceValue @param {Readonly<Record<string, unknown>>} spawnTiming */
+function validateSpawnTimingTrace(traceValue,spawnTiming){const trace=requireRecord(traceValue,"spawn_timing_trace_mismatch");if(canonicalJson(trace.spawnTiming)!==canonicalJson(spawnTiming))throw dataError("spawn_timing_trace_mismatch","Top conversion trace must bind exact source spawn timing");for(const key of ["boxing","flow"]){const values=requireArray(trace[key],"spawn_timing_trace_mismatch");for(const value of values)if(canonicalJson(requireRecord(value,"spawn_timing_trace_mismatch").spawnTiming)!==canonicalJson(spawnTiming))throw dataError("spawn_timing_trace_mismatch","Every conversion trace must bind exact source spawn timing");}}
 
 /** @param {unknown} traceValue @param {import("@aerobeat/web-contracts").AeroAuthoredNotePalette | null} palette @param {string} flowContentHash */
 function validateFlowTraceBinding(traceValue, palette, flowContentHash) {

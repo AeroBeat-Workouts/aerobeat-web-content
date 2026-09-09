@@ -23,6 +23,7 @@ const BOXING_MODE_COLOR_ROWS=Object.freeze([
   ["boxing_spatial_grid","straight_left","#FF0000"],["boxing_spatial_grid","straight_right","#808080"],["boxing_spatial_grid","hook_left","#FF0000"],["boxing_spatial_grid","hook_right","#808080"],["boxing_spatial_grid","uppercut_left","#FF0000"],["boxing_spatial_grid","uppercut_right","#808080"]
 ].map((row)=>Object.freeze(row)));
 const BOXING_MODE_FIXED_ROWS=Object.freeze([["boxing_lanes","guard",false],["boxing_lanes","squat",false],["boxing_lanes","weave_left",false],["boxing_lanes","weave_right",false],["boxing_spatial_grid","guard",false],["boxing_spatial_grid","squat",false],["boxing_spatial_grid","weave_left",false],["boxing_spatial_grid","weave_right",false]].map((row)=>Object.freeze(row)));
+const spawnTiming = Object.freeze({ schema:"aerobeat/beatsaber_spawn_timing",version:1,algorithm:"beatsaber_core_hjd_v1",bpm:120,noteJumpMovementSpeed:10,noteJumpStartBeatOffset:1,maxHalfJumpDistance:17.999,startHalfJumpDurationBeats:4,minimumHalfJumpDurationBeats:.25,halfJumpDurationBeats:3,reactionTimeMs:1500,jumpDistanceMeters:30 });
 const audioBytes = new TextEncoder().encode("deterministic-audio-fixture");
 const audioHash = hashBytes(audioBytes);
 const basePackage = await makePackage(audioHash);
@@ -85,10 +86,14 @@ await verifyProfileRejections(profilePackage);
 const runtime = createAeroContentRuntime({ onListenerError() { throw new Error("listener error callback should be isolated too"); } });
 const timingMapperSymbol = Symbol.for("aerobeat.web-content.internal-timing-mapper");
 const effectivePaletteSymbol = Symbol.for("aerobeat.web-content.internal-effective-palette");
+const spawnTimingSymbol = Symbol.for("aerobeat.web-content.internal-spawn-timing");
 const timingMapperDescriptor = Object.getOwnPropertyDescriptor(runtime, timingMapperSymbol);
 const effectivePaletteDescriptor = Object.getOwnPropertyDescriptor(runtime, effectivePaletteSymbol);
+const spawnTimingDescriptor = Object.getOwnPropertyDescriptor(runtime, spawnTimingSymbol);
 assert.deepEqual({ enumerable: timingMapperDescriptor?.enumerable, writable: timingMapperDescriptor?.writable, configurable: timingMapperDescriptor?.configurable }, { enumerable: false, writable: false, configurable: false });
 assert.deepEqual({ enumerable: effectivePaletteDescriptor?.enumerable, writable: effectivePaletteDescriptor?.writable, configurable: effectivePaletteDescriptor?.configurable }, { enumerable: false, writable: false, configurable: false });
+assert.deepEqual({ enumerable: spawnTimingDescriptor?.enumerable, writable: spawnTimingDescriptor?.writable, configurable: spawnTimingDescriptor?.configurable }, { enumerable: false, writable: false, configurable: false });
+assert.equal(runtime[spawnTimingSymbol](runtime.getSnapshot().generation), null, "private spawn timing is unavailable before readiness");
 assert.equal(runtime[timingMapperSymbol](runtime.getSnapshot().generation), null, "private timing mapper is unavailable before readiness");
 assert.equal(runtime[effectivePaletteSymbol](runtime.getSnapshot().generation), null, "private effective palette is unavailable before readiness");
 let listenerCalls = 0;
@@ -116,6 +121,11 @@ assert.deepEqual({ left:readyEffectivePalette?.left, right:readyEffectivePalette
 assert.equal(Object.isFrozen(readyEffectivePalette), true, "the private effective palette is immutable");
 assert.equal(runtime[effectivePaletteSymbol](snapshot.generation), readyEffectivePalette, "the current ready generation retains exact palette identity");
 assert.equal(runtime[effectivePaletteSymbol](snapshot.generation - 1), null, "a mismatched generation cannot obtain the palette");
+const readySpawnTiming=runtime[spawnTimingSymbol](snapshot.generation);
+assert.deepEqual(Object.fromEntries(Object.entries(readySpawnTiming)),spawnTiming,"the ready generation exposes exact immutable spawn timing");
+assert.equal(Object.isFrozen(readySpawnTiming),true);
+assert.equal(runtime[spawnTimingSymbol](snapshot.generation-1),null);
+assert.equal(JSON.stringify(snapshot).includes("beatsaber_spawn_timing"),false,"spawn timing stays out of public snapshots");
 const firstResolvedEvent = snapshot.resolvedEvents[0];
 assert.equal(readyTimingMapper(firstResolvedEvent.authoredBeat.start), firstResolvedEvent.centerTimestampMs, "private mapper reproduces resolved event timing exactly");
 assert.equal(Object.keys(runtime).some((key) => key.includes("timing") || key.includes("mapper")), false, "the timing mapper seam is not a public string-keyed API");
@@ -259,6 +269,7 @@ assert.equal(listenerCalls, changedPlaybackListenerCalls, "equivalent playback I
 const intervalPackage = structuredClone(basePackage);
 intervalPackage.song.durationSec = 90;
 intervalPackage.song.timing.tempoSegments[0].bpm = 150;
+replaceSpawnTiming(intervalPackage,{...spawnTiming,bpm:150,halfJumpDurationBeats:5,reactionTimeMs:2000,jumpDistanceMeters:40});
 const intervalFlowChart = intervalPackage.charts.find((chart) => chart.mode === "flow");
 assert.ok(intervalFlowChart);
 intervalFlowChart.beats = [
@@ -356,11 +367,15 @@ exactObstacleLimit.charts.find((chart) => chart.mode === "flow").beats.pop();
 rehashFlow(exactObstacleLimit);
 await validateRuntimePackage(exactObstacleLimit);
 const legacyPackage = structuredClone(basePackage); legacyPackage.schemaId = "aerobeat.song-package.v1"; legacyPackage.schemaVersion = 1; legacyPackage.packageVersion = "1.0.0";
-await assert.rejects(() => validateRuntimePackage(legacyPackage), hasCode("flow_obstacle_reimport_required"));
+await assert.rejects(() => validateRuntimePackage(legacyPackage), hasCode("spawn_timing_reimport_required"));
 const versionTwoPackage = structuredClone(basePackage); versionTwoPackage.schemaId = "aerobeat.song-package.v2"; versionTwoPackage.schemaVersion = 2; versionTwoPackage.packageVersion = "2.0.0";
-await assert.rejects(() => validateRuntimePackage(versionTwoPackage), hasCode("flow_obstacle_reimport_required"));
+await assert.rejects(() => validateRuntimePackage(versionTwoPackage), hasCode("spawn_timing_reimport_required"));
 const versionThreePackage = structuredClone(basePackage); versionThreePackage.schemaId = "aerobeat.song-package.v3"; versionThreePackage.schemaVersion = 3; versionThreePackage.packageVersion = "3.0.0";
-await assert.rejects(() => validateRuntimePackage(versionThreePackage), hasCode("note_palette_reimport_required"));
+await assert.rejects(() => validateRuntimePackage(versionThreePackage), hasCode("spawn_timing_reimport_required"));
+const versionFourPackage = structuredClone(basePackage); versionFourPackage.schemaId = "aerobeat.song-package.v4"; versionFourPackage.schemaVersion = 4; versionFourPackage.packageVersion = "4.0.0";
+await assert.rejects(() => validateRuntimePackage(versionFourPackage), hasCode("spawn_timing_reimport_required"));
+for(const [mutate,code] of [[(value)=>{delete value.source.spawnTiming.noteJumpStartBeatOffset;},"spawn_timing_invalid"],[(value)=>{value.source.spawnTiming.extra=true;},"spawn_timing_invalid"],[(value)=>{value.source.spawnTiming.reactionTimeMs+=1;},"spawn_timing_mismatch"],[(value)=>{value.source.spawnTiming.noteJumpMovementSpeed=0;},"spawn_timing_njs_invalid"],[(value)=>{value.source.spawnTiming.bpm=0;},"spawn_timing_bpm_invalid"]]){const invalid=structuredClone(basePackage);mutate(invalid);await assert.rejects(()=>validateRuntimePackage(invalid),hasCode(code));}
+const traceTimingMismatch=structuredClone(basePackage);traceTimingMismatch.conversionTrace.boxing[0].spawnTiming.reactionTimeMs+=1;await assert.rejects(()=>validateRuntimePackage(traceTimingMismatch),hasCode("spawn_timing_trace_mismatch"));
 const shadowedResolvedField = structuredClone(basePackage);
 shadowedResolvedField.charts.find((chart) => chart.mode === "flow").beats[0].centerTimestampMs = 500;
 rehashFlow(shadowedResolvedField);
@@ -725,16 +740,18 @@ async function makePackage(declaredAudioHash, converterProfile = null) {
   const flowChart = { schemaId: "aerobeat.chart.flow.v4", schemaVersion: 4, recordVersion: 2, rulesetId: "flow_grid_v2", chartId: "chart-flow", chartName: "Flow", mode: "flow", difficulty: "Expert", notePalette: null, contentHash: `sha256:${hashJson({ beats: flowBeats, rulesetId: "flow_grid_v2", notePalette: null })}`, beats: flowBeats };
   charts.push(flowChart);
   return {
-    schemaId: "aerobeat.song-package.v4", schemaVersion: 4, packageVersion: "4.0.0", packageId: "package-arbitrary-compatible", songId: "song-arbitrary", songName: "Arbitrary Compatible Map", notePalette: null,
-    source: { provider: "community", sourceId: "not-an-allowlist-id", sourceVersionHash: "source-version", difficulty: "Expert", sourceInfoFormat: "v2", sourceInfoVersion: "2.1.0", sourceInfoHash: `sha256:${"1".repeat(64)}`, sourceDifficultyPath: "Expert.dat", sourceBeatmapFormat: "v3", sourceBeatmapVersion: "3.3.0", sourceDifficultyHash: `sha256:${"2".repeat(64)}`, sourceHash, obstacleContract: "normalized_obstacle_v2", ...(converterProfile ? { converterProfile: structuredClone(converterProfile) } : {}) },
+    schemaId: "aerobeat.song-package.v5", schemaVersion: 5, packageVersion: "5.0.0", packageId: "package-arbitrary-compatible", songId: "song-arbitrary", songName: "Arbitrary Compatible Map", notePalette: null,
+    source: { provider: "community", sourceId: "not-an-allowlist-id", sourceVersionHash: "source-version", difficulty: "Expert", sourceInfoFormat: "v2", sourceInfoVersion: "2.1.0", sourceInfoHash: `sha256:${"1".repeat(64)}`, sourceDifficultyPath: "Expert.dat", sourceBeatmapFormat: "v3", sourceBeatmapVersion: "3.3.0", sourceDifficultyHash: `sha256:${"2".repeat(64)}`, sourceHash, spawnTiming: structuredClone(spawnTiming), obstacleContract: "normalized_obstacle_v2", ...(converterProfile ? { converterProfile: structuredClone(converterProfile) } : {}) },
     song: { schemaId: "aerobeat.song.v1", schemaVersion: 1, recordVersion: 1, songId: "song-arbitrary", songName: "Arbitrary Compatible Map", durationSec: 10, audio: { filePath: "song.ogg", contentHash: `sha256:${declaredAudioHash}` }, timing: { anchorMs: 0, tempoSegments: [{ startBeat: 0, bpm: 120 }], stopSegments: [], timeSignatureSegments: [{ startBeat: 0, numerator: 4, denominator: 4 }] } },
     charts,
     sets: charts.map((chart, index) => ({ schemaId: "aerobeat.set.v1", schemaVersion: 1, recordVersion: 1, setId: `set-${index}`, setName: chart.chartName, songId: "song-arbitrary", chartId: chart.chartId })),
-    recipeDefinitions: [], rulesetDefinitions: [], conversionTrace: { notePalette: null, boxing: charts.filter((chart) => chart.mode === "boxing").map((chart) => ({ chartId: chart.chartId, ...(converterProfile ? { converterProfile: structuredClone(converterProfile) } : {}) })), flow: [{ obstacleContract: "normalized_obstacle_v2", sourceHash, sourceInfoFormat: "v2", sourceInfoVersion: "2.1.0", sourceInfoHash: `sha256:${"1".repeat(64)}`, sourceDifficultyPath: "Expert.dat", sourceBeatmapFormat: "v3", sourceBeatmapVersion: "3.3.0", sourceDifficultyHash: `sha256:${"2".repeat(64)}`, notePalette: null, contentHash: flowChart.contentHash }], ...(converterProfile ? { converterProfile: structuredClone(converterProfile) } : {}) }, presentationSuggestion: null
+    recipeDefinitions: [], rulesetDefinitions: [], conversionTrace: { notePalette: null, spawnTiming: structuredClone(spawnTiming), boxing: charts.filter((chart) => chart.mode === "boxing").map((chart) => ({ chartId: chart.chartId, spawnTiming: structuredClone(spawnTiming), ...(converterProfile ? { converterProfile: structuredClone(converterProfile) } : {}) })), flow: [{ obstacleContract: "normalized_obstacle_v2", sourceHash, sourceInfoFormat: "v2", sourceInfoVersion: "2.1.0", sourceInfoHash: `sha256:${"1".repeat(64)}`, sourceDifficultyPath: "Expert.dat", sourceBeatmapFormat: "v3", sourceBeatmapVersion: "3.3.0", sourceDifficultyHash: `sha256:${"2".repeat(64)}`, spawnTiming: structuredClone(spawnTiming), notePalette: null, contentHash: flowChart.contentHash }], ...(converterProfile ? { converterProfile: structuredClone(converterProfile) } : {}) }, presentationSuggestion: null
   };
 }
 /** @param {Uint8Array} bytes @param {(metadata: Record<string, unknown>) => Record<string, unknown>} transform */
 function rewriteAeroMetadata(bytes, transform) { const originalLength = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(8, true); const original = /** @type {Record<string, unknown>} */ (JSON.parse(new TextDecoder().decode(bytes.slice(12, 12 + originalLength)))); const metadata = new TextEncoder().encode(canonical(transform(original))); const payload = bytes.slice(12 + originalLength); const output = new Uint8Array(12 + metadata.byteLength + payload.byteLength); output.set(new TextEncoder().encode("AEROPKG1")); new DataView(output.buffer).setUint32(8, metadata.byteLength, true); output.set(metadata, 12); output.set(payload, 12 + metadata.byteLength); return output; }
+/** @param {Record<string, unknown>} packageValue @param {Record<string, unknown>} value */
+function replaceSpawnTiming(packageValue,value){packageValue.source.spawnTiming=structuredClone(value);packageValue.conversionTrace.spawnTiming=structuredClone(value);for(const trace of [...packageValue.conversionTrace.boxing,...packageValue.conversionTrace.flow])trace.spawnTiming=structuredClone(value);}
 /** @param {Record<string, unknown>} profilePackage */
 async function verifyProfileRejections(profilePackage) {
   const mutations = [];
