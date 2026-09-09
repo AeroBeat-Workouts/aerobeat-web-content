@@ -1,7 +1,7 @@
 # Flow event admission privacy failure — debug record
 
-**Date:** 2026-09-09  
-**Bead:** `aerobeat-web-content-rp1`  
+**Date:** 2026-09-09
+**Bead:** `aerobeat-web-content-rp1`
 **Failing commit:** `8a110b81bd6a2c86bab9a4c4256de25966ed3fc6`
 
 ## Exact Observed Failure
