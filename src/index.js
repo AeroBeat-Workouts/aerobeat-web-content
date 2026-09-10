@@ -8,7 +8,7 @@ export {
   maximumAuthoredTimelineMs
 } from "@aerobeat/web-contracts";
 export { aeroContentRuntimeCapabilities, createAeroContentRuntime } from "./content-runtime.js";
-export { composeRuntimeVariant, validateRuntimePackage } from "./package-content.js";
+export { assertCurrentFlowRulesetBinding, composeRuntimeVariant, validateRuntimePackage } from "./package-content.js";
 
 /** @type {"aero.content.library"} */
 export const aeroContentServiceId = serviceIds.contentLibrary;

@@ -28,10 +28,10 @@ class AeroContentRuntimeElement extends HTMLElement {
     }
     const flowBeats = [{ start: 1, type: "note", hand: "left", placement: 4, requiresDirection: true, angleOffset: 0, direction: 1 }, { start: 2, end: 2.5, type: "obstacle", sourceGeometry:{schema:"aerobeat/obstacle_source_geometry",version:1,coordinateSpace:"beatsaber_v2_legacy_obstacle",kind:"v2_type_1",x:1,y:2,width:1,height:3},gameplayGeometry:{schema:"aerobeat/obstacle_gameplay_geometry",version:1,coordinateSpace:"aerobeat_top_left_grid",x:1,y:0,width:1,height:3},gridMask:[1,5,9] }, { start: 3, type: "bomb", placement: 6 }];
     const flowPalette = { source: "package", paletteHash: notePalette.paletteHash };
-    const rulesetVariants = ["flow_grid_v2", "flow_colliders_v1"];
-    const flowContentHash = `sha256:${await sha256(new TextEncoder().encode(canonical({ beats: flowBeats, rulesetId: "flow_grid_v2", rulesetVariants, notePalette: flowPalette })))}`;
-    charts.push({ schemaId: "aerobeat.chart.flow.v5", schemaVersion: 5, recordVersion: 2, rulesetId: "flow_grid_v2", rulesetVariants, chartId: "browser-flow", chartName: "Browser Flow", mode: "flow", difficulty: "Expert", notePalette: flowPalette, contentHash: flowContentHash, beats: flowBeats });
-    const packageRecord = { schemaId: "aerobeat.song-package.v6", schemaVersion: 6, packageVersion: "6.0.0", packageId: "browser-package", songId: "browser-song", songName: "Browser Runtime", notePalette, source: { provider: "fixture", sourceId: "browser", sourceVersionHash: "version", difficulty: "Expert", sourceInfoFormat: "v4", sourceInfoVersion: "4.0.1", sourceInfoHash: `sha256:${"3".repeat(64)}`, sourceDifficultyPath: "Expert.dat", sourceBeatmapFormat: "v4", sourceBeatmapVersion: "4.1.0", sourceDifficultyHash: `sha256:${"4".repeat(64)}`, sourceHash, spawnTiming, obstacleContract: "normalized_obstacle_v2", converterProfile }, song: { schemaId: "aerobeat.song.v1", schemaVersion: 1, recordVersion: 1, songId: "browser-song", songName: "Browser Runtime", durationSec: 2, audio: { filePath: "song.ogg", contentHash: `sha256:${audioHash}` }, timing: { anchorMs: 100, tempoSegments: [{ startBeat: 0, bpm: 120 }, { startBeat: 2, bpm: 60 }], stopSegments: [{ startBeat: 1, durationMs: 100 }], timeSignatureSegments: [{ startBeat: 0, numerator: 4, denominator: 4 }] } }, charts, sets: charts.map((chart, index) => ({ schemaId: "aerobeat.set.v1", schemaVersion: 1, recordVersion: 1, setId: `browser-set-${index}`, setName: chart.chartName, songId: "browser-song", chartId: chart.chartId })), recipeDefinitions: [], rulesetDefinitions: [], conversionTrace: { notePalette: flowPalette, spawnTiming, converterProfile, boxing: charts.filter((chart) => chart.mode === "boxing").map((chart) => ({ chartId: chart.chartId, spawnTiming, converterProfile })), flow:[{ difficulty:"Expert", events:[], obstacleContract:"normalized_obstacle_v2", rulesetId:"flow_grid_v2", rulesetVariants, sourceHash, sourceInfoFormat:"v4", sourceInfoVersion:"4.0.1", sourceInfoHash:`sha256:${"3".repeat(64)}`, sourceDifficultyPath:"Expert.dat", sourceBeatmapFormat:"v4", sourceBeatmapVersion:"4.1.0", sourceDifficultyHash:`sha256:${"4".repeat(64)}`, spawnTiming, notePalette:flowPalette, contentHash:flowContentHash }] }, presentationSuggestion: null };
+    const rulesetVariants = ["flow_colliders_v1"];
+    const flowContentHash = `sha256:${await sha256(new TextEncoder().encode(canonical({ beats: flowBeats, rulesetId: "flow_colliders_v1", rulesetVariants, notePalette: flowPalette })))}`;
+    charts.push({ schemaId: "aerobeat.chart.flow.v5", schemaVersion: 5, recordVersion: 2, rulesetId: "flow_colliders_v1", rulesetVariants, chartId: "browser-flow", chartName: "Browser Flow", mode: "flow", difficulty: "Expert", notePalette: flowPalette, contentHash: flowContentHash, beats: flowBeats });
+    const packageRecord = { schemaId: "aerobeat.song-package.v6", schemaVersion: 6, packageVersion: "6.0.0", packageId: "browser-package", songId: "browser-song", songName: "Browser Runtime", notePalette, source: { provider: "fixture", sourceId: "browser", sourceVersionHash: "version", difficulty: "Expert", sourceInfoFormat: "v4", sourceInfoVersion: "4.0.1", sourceInfoHash: `sha256:${"3".repeat(64)}`, sourceDifficultyPath: "Expert.dat", sourceBeatmapFormat: "v4", sourceBeatmapVersion: "4.1.0", sourceDifficultyHash: `sha256:${"4".repeat(64)}`, sourceHash, spawnTiming, obstacleContract: "normalized_obstacle_v2", converterProfile }, song: { schemaId: "aerobeat.song.v1", schemaVersion: 1, recordVersion: 1, songId: "browser-song", songName: "Browser Runtime", durationSec: 2, audio: { filePath: "song.ogg", contentHash: `sha256:${audioHash}` }, timing: { anchorMs: 100, tempoSegments: [{ startBeat: 0, bpm: 120 }, { startBeat: 2, bpm: 60 }], stopSegments: [{ startBeat: 1, durationMs: 100 }], timeSignatureSegments: [{ startBeat: 0, numerator: 4, denominator: 4 }] } }, charts, sets: charts.map((chart, index) => ({ schemaId: "aerobeat.set.v1", schemaVersion: 1, recordVersion: 1, setId: `browser-set-${index}`, setName: chart.chartName, songId: "browser-song", chartId: chart.chartId })), recipeDefinitions: [], rulesetDefinitions: [], conversionTrace: { notePalette: flowPalette, spawnTiming, converterProfile, boxing: charts.filter((chart) => chart.mode === "boxing").map((chart) => ({ chartId: chart.chartId, spawnTiming, converterProfile })), flow:[{ difficulty:"Expert", events:[], obstacleContract:"normalized_obstacle_v2", rulesetId:"flow_colliders_v1", rulesetVariants, sourceHash, sourceInfoFormat:"v4", sourceInfoVersion:"4.0.1", sourceInfoHash:`sha256:${"3".repeat(64)}`, sourceDifficultyPath:"Expert.dat", sourceBeatmapFormat:"v4", sourceBeatmapVersion:"4.1.0", sourceDifficultyHash:`sha256:${"4".repeat(64)}`, spawnTiming, notePalette:flowPalette, contentHash:flowContentHash }] }, presentationSuggestion: null };
     const packageHash = await sha256(new TextEncoder().encode(canonical(packageRecord)));
     const paddedAudio = new Uint8Array(audio.byteLength + 11);
     paddedAudio.set(audio, 7);
@@ -95,17 +95,16 @@ class AeroContentRuntimeElement extends HTMLElement {
     const handle = { schema: "aerobeat/persistence_handle", version: 1, storage: "memory", namespace: "browser.authored", key: "browser-package", packageId: packageRecord.packageId, packageHash: { schema: "aerobeat/content_hash", version: 1, algorithm: "sha256", value: packageHash } };
     await persistence.loadPersistenceHandle(handle, { assetHashes: { "song.ogg": audioHash } });
     const flowVariants = snapshot.variants.filter((variant) => variant.mode === "flow");
-    if (flowVariants.length !== 2 || flowVariants[0].rulesetId !== "flow_grid_v2" || flowVariants[1].rulesetId !== "flow_colliders_v1") throw new Error("Browser Flow successor variants are incomplete");
+    if (flowVariants.length !== 1 || flowVariants[0].rulesetId !== "flow_colliders_v1") throw new Error("Browser Flow successor variants are incomplete");
     const gridEvents = snapshot.resolvedEvents;
-    await second.selectVariant(flowVariants[1].variantId);
+    await second.selectVariant(flowVariants[0].variantId);
     const colliderEvents = second.getSnapshot().resolvedEvents;
     const sharedFlowEventObjects = colliderEvents.every((event,index) => event.authoredBeat === gridEvents[index].authoredBeat);
-    const distinctFlowScoreIdentities = flowVariants[0].scoreIdentityHash.value !== flowVariants[1].scoreIdentityHash.value;
-    const collidersPolicy = [flowVariants[1].recipeId, flowVariants[1].ranked, flowVariants[1].localOnly];
+    const distinctFlowScoreIdentities = flowVariants[0].scoreIdentityHash.value !== flowVariants[0].provenance.schema;
+    const collidersPolicy = [flowVariants[0].recipeId, flowVariants[0].ranked, flowVariants[0].localOnly];
+    const gridCompositeSnapshot = second.getSnapshot();
     await second.selectVariant(flowVariants[0].variantId,{modifierIds:["no_obstacles"]});
-    const gridCompositeSnapshot=second.getSnapshot();
-    await second.selectVariant(flowVariants[1].variantId,{modifierIds:["no_obstacles"]});
-    const colliderCompositeSnapshot=second.getSnapshot();
+    const colliderCompositeSnapshot = second.getSnapshot();
     const flowCompositeEvidence={
       distinctVariantIds:gridCompositeSnapshot.selectedVariant.variantId!==colliderCompositeSnapshot.selectedVariant.variantId,
       sharedChartId:gridCompositeSnapshot.selectedVariant.chartId===colliderCompositeSnapshot.selectedVariant.chartId,
@@ -114,10 +113,12 @@ class AeroContentRuntimeElement extends HTMLElement {
       identicalAuthoredEvents:canonical(gridCompositeSnapshot.resolvedEvents.map((event)=>event.authoredBeat))===canonical(colliderCompositeSnapshot.resolvedEvents.map((event)=>event.authoredBeat)),
       rulesets:[gridCompositeSnapshot.selectedVariant.rulesetId,colliderCompositeSnapshot.selectedVariant.rulesetId],
       bases:[gridCompositeSnapshot.selectedVariant.provenance.baseVariantId,colliderCompositeSnapshot.selectedVariant.provenance.baseVariantId],
+      baseRanked:gridCompositeSnapshot.selectedVariant.ranked,
+      baseLocalOnly:gridCompositeSnapshot.selectedVariant.localOnly,
       envelopeAgreement:[gridCompositeSnapshot,colliderCompositeSnapshot].every((entry)=>entry.resolvedEvents.every((event)=>event.variantId===entry.selectedVariant.variantId&&event.chartId===entry.selectedVariant.chartId))
     };
     await second.selectVariant(flowVariants[0].variantId,{modifierIds:["no_obstacles"]});
-    flowCompositeEvidence.gridCacheStable=second.getSnapshot().selectedVariant.variantId===gridCompositeSnapshot.selectedVariant.variantId;
+    flowCompositeEvidence.gridCacheStable=second.getSnapshot().selectedVariant.variantId===colliderCompositeSnapshot.selectedVariant.variantId;
     const successorPublicJson = JSON.stringify(second.getSnapshot());
     const publicHasCollisionLeak = ["colliderRadius","collisionSettings","wrist","nose","trajectory","segmentEndpoint","confidence","calibrationId","frameId","contactEpisode"].some((token)=>successorPublicJson.includes(token));
     await second.selectVariant(flowVariants[0].variantId);

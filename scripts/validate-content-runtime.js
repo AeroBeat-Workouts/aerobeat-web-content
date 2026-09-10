@@ -8,6 +8,7 @@ import {
   aeroContentRuntimeDescriptor,
   aeroContentServiceId,
   authoredBeatToTimelineMs,
+  assertCurrentFlowRulesetBinding,
   composeRuntimeVariant,
   createAeroContentRuntime,
   createAuthoredBeatToTimelineMs,
@@ -43,9 +44,9 @@ assert.equal(aeroContentRuntimeCapabilities.playlistAllowlistRequired, false);
 assert.equal(maximumAuthoredTimelineMs, 86_400_000);
 const successorFixture = JSON.parse(await readFile(new URL("../fixtures/flow-colliders-3c9d-successor-v1.json", import.meta.url), "utf8"));
 assert.deepEqual(successorFixture.expected, {
-  packageHash: "sha256:60e850b3a822b22f34ff1050e0f8531b5d34ce8e3bb3a01bd3208ae27a074b92",
-  flowContentHash: "sha256:329bf3af3435f309670a307748f70585cf4be15372d4a7b54a658fa28cfd6145",
-  semanticParityHash: "sha256:978c9d7d1415e5597e1e2560b88090a05236088d117f422dae0222f21182cc99"
+  packageHash: "sha256:b4e0d16058ceaa60fe118e2cbdbcf0d518eb37384bec4d1a5a3be658d351ebb1",
+  flowContentHash: "sha256:9c48a53b0fac85d3798756a38797fccf1f88360ac38e312a5b4d103d98d1d39d",
+  semanticParityHash: "sha256:63fbd288ce7694528a83be4275a69fc176eda11b3d62c072694b865e0611b525"
 });
 const successorEnvelope = makeAeroPackage(successorFixture.package, successorFixture.expected.packageHash.slice(7), []);
 const parsedSuccessorEnvelope = await parseAeroPackage(successorEnvelope);
@@ -56,35 +57,26 @@ const successorFlowVariants = successorValidation.variants.filter((variant) => v
 assert.equal(successorFlowChart.contentHash, successorFixture.expected.flowContentHash);
 assert.equal(successorValidation.packageHash.value, successorFixture.expected.packageHash.slice(7));
 assert.equal(successorValidation.semanticParityHash.value, successorFixture.expected.semanticParityHash.slice(7));
+assert.equal(successorValidation.variants.length, 5, "validated v6 package exposes the single Flow variant plus four Boxing variants");
 assert.deepEqual(successorFlowVariants.map((variant) => [variant.variantId, variant.rulesetId, variant.recipeId, variant.ranked, variant.localOnly]), [
-  [successorFlowChart.chartId, "flow_grid_v2", null, true, false],
-  [`${successorFlowChart.chartId}~ruleset-flow_colliders_v1`, "flow_colliders_v1", null, false, true]
+  [successorFlowChart.chartId, "flow_colliders_v1", null, true, false]
 ]);
-assert.notDeepEqual(successorFlowVariants[0].scoreIdentityHash, successorFlowVariants[1].scoreIdentityHash, "Flow rulesets require distinct score partitions");
-const predecessorScoringChart = structuredClone(successorFlowChart); predecessorScoringChart.schemaId = "aerobeat.chart.flow.v4"; predecessorScoringChart.schemaVersion = 4; delete predecessorScoringChart.rulesetVariants; delete predecessorScoringChart.notePalette; delete predecessorScoringChart.contentHash;
-const predecessorScoringMapHash = hashJson(predecessorScoringChart);
-const predecessorScoreIdentity = hashJson({ packageId: successorValidation.packageId, chartId: successorFlowChart.chartId, rulesetId: "flow_grid_v2", recipeId: null, modifierIds: [], mapHash: predecessorScoringMapHash, ranked: true });
-assert.equal(successorFlowVariants[0].scoreIdentityHash.value, predecessorScoreIdentity, "successor Flow Grid retains the historical score partition identity");
-assert.equal(successorFlowVariants[0].chart, successorFlowVariants[1].chart, "both Flow rulesets share one exact frozen chart object");
-assert.equal(successorFlowVariants[0].chart.beats, successorFlowVariants[1].chart.beats, "both Flow rulesets share one exact authored beats array");
-assert.equal(canonical(successorFlowVariants[0].chart.beats), canonical(successorFlowVariants[1].chart.beats), "both Flow rulesets resolve identical authored beat bytes");
+const successorFlowVariant = successorFlowVariants[0];
+assert.equal(successorFlowVariant.chart, successorFlowChart, "the sole Flow variant exposes the exact frozen chart object");
+const successorScoringChart = structuredClone(successorFlowChart); successorScoringChart.schemaId = "aerobeat.chart.flow.v4"; successorScoringChart.schemaVersion = 4; delete successorScoringChart.rulesetVariants; delete successorScoringChart.notePalette; delete successorScoringChart.contentHash;
+assert.equal(successorFlowVariant.scoreIdentityHash.value, hashJson({ packageId: successorValidation.packageId, chartId: successorFlowChart.chartId, rulesetId: "flow_colliders_v1", recipeId: null, modifierIds: [], mapHash: hashJson(successorScoringChart), ranked: true }), "the single Flow variant owns the colliders score partition over the v4-projected scoring chart");
 const compositeModifiers = ["obstacle_visual_only"];
-const [successorGridComposite, successorColliderComposite, repeatedColliderComposite] = await Promise.all([
-  composeRuntimeVariant(successorFlowVariants[0], compositeModifiers, successorValidation.packageId),
-  composeRuntimeVariant(successorFlowVariants[1], compositeModifiers, successorValidation.packageId),
-  composeRuntimeVariant(successorFlowVariants[1], [...compositeModifiers].reverse(), successorValidation.packageId)
+const [successorColliderComposite, repeatedColliderComposite] = await Promise.all([
+  composeRuntimeVariant(successorFlowVariant, compositeModifiers, successorValidation.packageId),
+  composeRuntimeVariant(successorFlowVariant, [...compositeModifiers].reverse(), successorValidation.packageId)
 ]);
-assert.notEqual(successorGridComposite.variantId, successorColliderComposite.variantId, "same-modifier Flow rulesets require distinct public composite variant identities");
-assert.equal(successorGridComposite.chartId, successorColliderComposite.chartId, "same derived Flow chart bytes retain one map-derived chart identity");
 assert.deepEqual(successorColliderComposite, repeatedColliderComposite, "composite identity is deterministic and modifier-order canonical");
-assert.deepEqual(successorGridComposite.modifierIds, compositeModifiers);
 assert.deepEqual(successorColliderComposite.modifierIds, compositeModifiers);
-assert.deepEqual(successorGridComposite.mapHash, successorColliderComposite.mapHash, "ruleset selection does not alter derived mapHash semantics");
-assert.notDeepEqual(successorGridComposite.scoreIdentityHash, successorColliderComposite.scoreIdentityHash, "composite score identity remains ruleset-bound");
-assert.equal(canonical(successorGridComposite.chart.beats), canonical(successorColliderComposite.chart.beats), "same modifiers produce identical derived authored-event bytes");
-assert.deepEqual([successorGridComposite.rulesetId, successorGridComposite.provenance.baseVariantId], ["flow_grid_v2", successorFlowVariants[0].variantId]);
-assert.deepEqual([successorColliderComposite.rulesetId, successorColliderComposite.provenance.baseVariantId], ["flow_colliders_v1", successorFlowVariants[1].variantId]);
-for (const rulesetVariants of [undefined, ["flow_grid_v2"], ["flow_colliders_v1"], ["flow_colliders_v1", "flow_grid_v2"], ["flow_grid_v2", "flow_colliders_v1", "flow_colliders_v1"]]) {
+assert.deepEqual([successorColliderComposite.rulesetId, successorColliderComposite.provenance.baseVariantId], ["flow_colliders_v1", successorFlowVariant.variantId]);
+assert.equal(successorColliderComposite.chartId, `${successorFlowChart.chartId}~mods-${hashJson({ baseChartId: successorFlowChart.chartId, modifiers: compositeModifiers }).slice(0, 12)}`, "derived Flow chart retains the map-derived chart identity");
+assert.equal(successorColliderComposite.ranked, false);
+assert.equal(successorColliderComposite.localOnly, true);
+for (const rulesetVariants of [undefined, ["flow_grid_v2"], ["flow_colliders_v1", "flow_grid_v2"], ["flow_colliders_v1", "flow_colliders_v1"]]) {
   const tampered = structuredClone(successorFixture.package);
   const chart = tampered.charts.find((entry) => entry.mode === "flow");
   const trace = tampered.conversionTrace.flow[0];
@@ -95,7 +87,27 @@ for (const rulesetVariants of [undefined, ["flow_grid_v2"], ["flow_colliders_v1"
   await assert.rejects(() => validateRuntimePackage(tampered), hasCode("flow_chart_schema_invalid"), "missing, partial, reordered, or duplicate successor identities fail closed after attacker rehash");
 }
 const traceRulesetMismatch = structuredClone(successorFixture.package); traceRulesetMismatch.conversionTrace.flow[0].rulesetVariants = ["flow_colliders_v1", "flow_grid_v2"];
-await assert.rejects(() => validateRuntimePackage(traceRulesetMismatch), hasCode("flow_trace_invalid"), "Flow trace ordered rulesets must agree with the exact chart identity");
+await assert.rejects(() => validateRuntimePackage(traceRulesetMismatch), hasCode("flow_trace_invalid"), "Flow trace ruleset variants must agree with the sole colliders chart identity");
+// Management-readable, playback-reimport split: legacy two-variant Flow Grid bytes remain
+// readable (historical reads) but are reimport-required for playback via the exact boundary code.
+const legacyFlowGridPackage = structuredClone(successorFixture.package);
+{
+  const chart = legacyFlowGridPackage.charts.find((entry) => entry.mode === "flow");
+  const trace = legacyFlowGridPackage.conversionTrace.flow[0];
+  chart.rulesetId = "flow_grid_v2";
+  chart.rulesetVariants = ["flow_grid_v2", "flow_colliders_v1"];
+  trace.rulesetId = "flow_grid_v2";
+  trace.rulesetVariants = ["flow_grid_v2", "flow_colliders_v1"];
+  const legacyFlowContentHash = `sha256:${hashJson({ beats: chart.beats, rulesetId: chart.rulesetId, rulesetVariants: chart.rulesetVariants, notePalette: chart.notePalette })}`;
+  chart.contentHash = legacyFlowContentHash;
+  trace.contentHash = legacyFlowContentHash;
+}
+const legacyFlowGridHash = hashJson(legacyFlowGridPackage);
+const legacyFlowGridReadable = await validateRuntimePackage(legacyFlowGridPackage, { declaredPackageHash: `sha256:${legacyFlowGridHash}` });
+assert.equal(legacyFlowGridReadable.variants.length, 5, "legacy two-variant Flow Grid bytes remain readable for historical reads");
+assert.deepEqual(legacyFlowGridReadable.variants.filter((variant) => variant.mode === "flow").map((variant) => [variant.variantId, variant.rulesetId, variant.ranked, variant.localOnly]), [[successorFlowChart.chartId, "flow_colliders_v1", true, false]], "legacy bytes resolve one playable colliders runtime variant bound to the authored chart ID");
+assert.throws(() => assertCurrentFlowRulesetBinding(legacyFlowGridPackage), hasCode("flow_grid_reimport_required"), "retired Flow Grid binds are reimport-required for playback at the authoring/persistence boundary");
+assert.doesNotThrow(() => assertCurrentFlowRulesetBinding(successorFixture.package), "current single-variant colliders bindings pass the playback boundary");
 const perVariantBeats = structuredClone(successorFixture.package); perVariantBeats.charts.find((chart) => chart.mode === "flow").beatsByRuleset = { flow_grid_v2: [], flow_colliders_v1: [] };
 await assert.rejects(() => validateRuntimePackage(perVariantBeats), hasCode("flow_chart_shape_invalid"), "per-ruleset beat authority is forbidden");
 const canonicalTiming = { anchorMs: 250, tempoSegments: [{ startBeat: 0, bpm: 120 }, { startBeat: 4, bpm: 60 }, { startBeat: 8, bpm: 240 }], stopSegments: [{ startBeat: 2, durationMs: 125 }, { startBeat: 6, durationMs: 375 }], timeSignatureSegments: [{ startBeat: 0, numerator: 4, denominator: 4 }] };
@@ -114,10 +126,10 @@ for (const malformed of [
   { anchorMs: 0, tempoSegments: [{ startBeat: 0, bpm: 120 }], stopSegments: [{ startBeat: 1, durationMs: 0 }], timeSignatureSegments: [{ startBeat: 0, numerator: 4, denominator: 4 }] }
 ]) assert.throws(() => createAuthoredBeatToTimelineMs(malformed), TypeError);
 const legacyValidation = await validateRuntimePackage(basePackage);
-assert.equal(legacyValidation.variants.length, 6);
+assert.equal(legacyValidation.variants.length, 5);
 assert.throws(() => cloneFrozenData(Array(100_000).fill(null)), hasCode("data_too_large"), "generic data cloning must retain its 100,000-item default");
 const largeCanonicalPackage = packageWithFlowEvents(basePackage, 20_000);
-assert.equal((await validateRuntimePackage(largeCanonicalPackage)).variants.length, 6, "package validation must admit a valid canonical package above the generic item bound");
+assert.equal((await validateRuntimePackage(largeCanonicalPackage)).variants.length, 5, "package validation must admit a valid canonical package above the generic item bound");
 const excessiveCanonicalPackage = packageWithFlowEvents(basePackage, 84_000);
 await assert.rejects(() => validateRuntimePackage(excessiveCanonicalPackage), hasCode("data_too_large"), "package validation must remain bounded at 500,000 items");
 const cyclicPackage = structuredClone(basePackage); cyclicPackage.loop = cyclicPackage;
@@ -135,10 +147,10 @@ assert.equal(Object.hasOwn(legacyComposite.chart.prototype, "converterProfile"),
 assert.equal(legacyComposite.chart.prototype.contentHash, `sha256:${hashJson({ beats: legacyComposite.chart.beats, recipeId: legacyComposite.recipeId, rulesetId: legacyComposite.rulesetId, sourceHash: legacyComposite.chart.prototype.sourceHash })}`);
 const profilePackage = await makePackage(audioHash, canonicalConverterProfile);
 const profileValidation = await validateRuntimePackage(profilePackage);
-assert.equal(profileValidation.variants.length, 6);
+assert.equal(profileValidation.variants.length, 5);
 assert.deepEqual(profileValidation.variants.filter((entry) => entry.mode === "boxing").map((entry) => entry.chart.prototype.converterProfile.contentHash), Array(4).fill(canonicalConverterProfile.contentHash));
 const reachPackage = await makePackage(audioHash, reachConverterProfile);
-assert.equal((await validateRuntimePackage(reachPackage)).variants.length, 6);
+assert.equal((await validateRuntimePackage(reachPackage)).variants.length, 5);
 const profileBase = profileValidation.variants.find((entry) => entry.mode === "boxing");
 assert.ok(profileBase);
 const profileComposite = await composeRuntimeVariant(profileBase, ["no_squats"], profilePackage.packageId);
@@ -164,31 +176,24 @@ runtime.subscribe(() => { listenerCalls += 1; throw new Error("expected isolated
 await runtime.loadPackage({ package: basePackage, packageHash: `sha256:${packageHash}`, assets: [{ path: "song.ogg", bytes: audioBytes }] });
 let snapshot = runtime.getSnapshot();
 assert.equal(snapshot.state, "ready");
-assert.equal(snapshot.variants.length, 6);
+assert.equal(snapshot.variants.length, 5);
 const runtimeFlowVariants = snapshot.variants.filter((variant) => variant.mode === "flow");
-assert.deepEqual(runtimeFlowVariants.map((variant) => variant.rulesetId), ["flow_grid_v2", "flow_colliders_v1"]);
-assert.equal(snapshot.selectedVariant.rulesetId, "flow_grid_v2", "Flow Grid remains the exact default");
-const gridResolvedEvents = snapshot.resolvedEvents;
-await runtime.selectVariant(runtimeFlowVariants[1].variantId);
-const colliderResolvedEvents = runtime.getSnapshot().resolvedEvents;
-assert.deepEqual(colliderResolvedEvents.map((event) => event.authoredBeat), gridResolvedEvents.map((event) => event.authoredBeat), "both Flow variants resolve the same exact authored event objects");
-assert.equal(colliderResolvedEvents.every((event, index) => event.authoredBeat === gridResolvedEvents[index].authoredBeat), true, "shared Flow bytes retain object identity across ruleset resolution");
-assert.equal(colliderResolvedEvents.every((event) => event.variantId === runtimeFlowVariants[1].variantId && event.chartId === runtimeFlowVariants[1].chartId), true);
+assert.deepEqual(runtimeFlowVariants.map((variant) => variant.rulesetId), ["flow_colliders_v1"], "the sole Flow runtime variant is the colliders ruleset");
+assert.equal(snapshot.selectedVariant.rulesetId, "flow_colliders_v1", "Flow (colliders) remains the exact default");
+assert.equal(snapshot.selectedVariant.ranked, true);
+assert.equal(snapshot.selectedVariant.localOnly, false);
+const flowResolvedEvents = snapshot.resolvedEvents;
+await runtime.selectVariant(runtimeFlowVariants[0].variantId);
+const reselectedFlowEvents = runtime.getSnapshot().resolvedEvents;
+assert.equal(reselectedFlowEvents.every((event, index) => event.authoredBeat === flowResolvedEvents[index].authoredBeat), true, "reselecting the sole Flow variant resolves the same exact authored event objects");
 await runtime.selectVariant(runtimeFlowVariants[0].variantId, { modifierIds: ["no_obstacles"] });
-const gridCompositeSnapshot = runtime.getSnapshot();
-await runtime.selectVariant(runtimeFlowVariants[1].variantId, { modifierIds: ["no_obstacles"] });
 const colliderCompositeSnapshot = runtime.getSnapshot();
-assert.notEqual(gridCompositeSnapshot.selectedVariant.variantId, colliderCompositeSnapshot.selectedVariant.variantId, "runtime cache publishes distinct same-modifier Flow selections");
-assert.equal(gridCompositeSnapshot.selectedVariant.chartId, colliderCompositeSnapshot.selectedVariant.chartId, "same modified Flow map retains shared composite chart identity");
-assert.deepEqual(gridCompositeSnapshot.selectedVariant.mapHash, colliderCompositeSnapshot.selectedVariant.mapHash);
-assert.notDeepEqual(gridCompositeSnapshot.selectedVariant.scoreIdentityHash, colliderCompositeSnapshot.selectedVariant.scoreIdentityHash);
-assert.deepEqual(gridCompositeSnapshot.resolvedEvents.map((event) => event.authoredBeat), colliderCompositeSnapshot.resolvedEvents.map((event) => event.authoredBeat), "same modifiers resolve identical Flow authored-event projections");
-assert.equal(gridCompositeSnapshot.resolvedEvents.every((event) => event.variantId === gridCompositeSnapshot.selectedVariant.variantId && event.chartId === gridCompositeSnapshot.selectedVariant.chartId), true);
+assert.deepEqual(colliderCompositeSnapshot.selectedVariant.mapHash, runtimeFlowVariants[0].mapHash);
+assert.notDeepEqual(colliderCompositeSnapshot.selectedVariant.scoreIdentityHash, runtimeFlowVariants[0].scoreIdentityHash);
 assert.equal(colliderCompositeSnapshot.resolvedEvents.every((event) => event.variantId === colliderCompositeSnapshot.selectedVariant.variantId && event.chartId === colliderCompositeSnapshot.selectedVariant.chartId), true);
-assert.deepEqual([gridCompositeSnapshot.selectedVariant.rulesetId, gridCompositeSnapshot.selectedVariant.provenance.baseVariantId], ["flow_grid_v2", runtimeFlowVariants[0].variantId]);
-assert.deepEqual([colliderCompositeSnapshot.selectedVariant.rulesetId, colliderCompositeSnapshot.selectedVariant.provenance.baseVariantId], ["flow_colliders_v1", runtimeFlowVariants[1].variantId]);
+assert.deepEqual([colliderCompositeSnapshot.selectedVariant.rulesetId, colliderCompositeSnapshot.selectedVariant.provenance.baseVariantId], ["flow_colliders_v1", runtimeFlowVariants[0].variantId]);
 await runtime.selectVariant(runtimeFlowVariants[0].variantId, { modifierIds: ["no_obstacles"] });
-assert.equal(runtime.getSnapshot().selectedVariant.variantId, gridCompositeSnapshot.selectedVariant.variantId, "alternating selection reuses the deterministic Grid cache entry without cross-ruleset ambiguity");
+assert.equal(runtime.getSnapshot().selectedVariant.variantId, colliderCompositeSnapshot.selectedVariant.variantId, "repeated selection reuses the deterministic Flow composite cache entry");
 await runtime.selectVariant(runtimeFlowVariants[0].variantId);
 snapshot = runtime.getSnapshot();
 const publicSuccessorJson = JSON.stringify(snapshot);
@@ -836,7 +841,7 @@ async function makePackage(declaredAudioHash, converterProfile = null) {
     charts.push({ schemaId: "aerobeat.chart.boxing.v1", schemaVersion: 1, recordVersion: 1, chartId: `chart-${token}`, chartName: token, mode: "boxing", difficulty: "Expert", prototype: { contractId: "aerobeat.boxing.prototype.v1", recipeId, recipeVersion: "1.0.0", rulesetId, rulesetVersion: "1.0.0", sourceHash, recipeHash: `sha256:${"1".repeat(64)}`, rulesetHash: `sha256:${"2".repeat(64)}`, contentHash: `sha256:${contentHash}`, modifiers: [], ...(converterProfile ? { converterProfile: structuredClone(converterProfile) } : {}), regenerationRequiredFor: [] }, beats });
   }
   const flowBeats = [{ start: 1, type: "note", hand: "left", placement: 4, requiresDirection: true, angleOffset: 0, direction: 1 }];
-  const flowChart = { schemaId: "aerobeat.chart.flow.v5", schemaVersion: 5, recordVersion: 2, rulesetId: "flow_grid_v2", rulesetVariants: ["flow_grid_v2", "flow_colliders_v1"], chartId: "chart-flow", chartName: "Flow", mode: "flow", difficulty: "Expert", notePalette: null, contentHash: `sha256:${hashJson({ beats: flowBeats, rulesetId: "flow_grid_v2", rulesetVariants: ["flow_grid_v2", "flow_colliders_v1"], notePalette: null })}`, beats: flowBeats };
+  const flowChart = { schemaId: "aerobeat.chart.flow.v5", schemaVersion: 5, recordVersion: 2, rulesetId: "flow_colliders_v1", rulesetVariants: ["flow_colliders_v1"], chartId: "chart-flow", chartName: "Flow", mode: "flow", difficulty: "Expert", notePalette: null, contentHash: `sha256:${hashJson({ beats: flowBeats, rulesetId: "flow_colliders_v1", rulesetVariants: ["flow_colliders_v1"], notePalette: null })}`, beats: flowBeats };
   charts.push(flowChart);
   return {
     schemaId: "aerobeat.song-package.v6", schemaVersion: 6, packageVersion: "6.0.0", packageId: "package-arbitrary-compatible", songId: "song-arbitrary", songName: "Arbitrary Compatible Map", notePalette: null,
@@ -844,7 +849,7 @@ async function makePackage(declaredAudioHash, converterProfile = null) {
     song: { schemaId: "aerobeat.song.v1", schemaVersion: 1, recordVersion: 1, songId: "song-arbitrary", songName: "Arbitrary Compatible Map", durationSec: 10, audio: { filePath: "song.ogg", contentHash: `sha256:${declaredAudioHash}` }, timing: { anchorMs: 0, tempoSegments: [{ startBeat: 0, bpm: 120 }], stopSegments: [], timeSignatureSegments: [{ startBeat: 0, numerator: 4, denominator: 4 }] } },
     charts,
     sets: charts.map((chart, index) => ({ schemaId: "aerobeat.set.v1", schemaVersion: 1, recordVersion: 1, setId: `set-${index}`, setName: chart.chartName, songId: "song-arbitrary", chartId: chart.chartId })),
-    recipeDefinitions: [], rulesetDefinitions: [], conversionTrace: { notePalette: null, spawnTiming: structuredClone(spawnTiming), boxing: charts.filter((chart) => chart.mode === "boxing").map((chart) => ({ chartId: chart.chartId, spawnTiming: structuredClone(spawnTiming), ...(converterProfile ? { converterProfile: structuredClone(converterProfile) } : {}) })), flow: [{ difficulty: "Expert", events: [], obstacleContract: "normalized_obstacle_v2", rulesetId: "flow_grid_v2", rulesetVariants: ["flow_grid_v2", "flow_colliders_v1"], sourceHash, sourceInfoFormat: "v2", sourceInfoVersion: "2.1.0", sourceInfoHash: `sha256:${"1".repeat(64)}`, sourceDifficultyPath: "Expert.dat", sourceBeatmapFormat: "v3", sourceBeatmapVersion: "3.3.0", sourceDifficultyHash: `sha256:${"2".repeat(64)}`, spawnTiming: structuredClone(spawnTiming), notePalette: null, contentHash: flowChart.contentHash }], ...(converterProfile ? { converterProfile: structuredClone(converterProfile) } : {}) }, presentationSuggestion: null
+    recipeDefinitions: [], rulesetDefinitions: [], conversionTrace: { notePalette: null, spawnTiming: structuredClone(spawnTiming), boxing: charts.filter((chart) => chart.mode === "boxing").map((chart) => ({ chartId: chart.chartId, spawnTiming: structuredClone(spawnTiming), ...(converterProfile ? { converterProfile: structuredClone(converterProfile) } : {}) })), flow: [{ difficulty: "Expert", events: [], obstacleContract: "normalized_obstacle_v2", rulesetId: "flow_colliders_v1", rulesetVariants: ["flow_colliders_v1"], sourceHash, sourceInfoFormat: "v2", sourceInfoVersion: "2.1.0", sourceInfoHash: `sha256:${"1".repeat(64)}`, sourceDifficultyPath: "Expert.dat", sourceBeatmapFormat: "v3", sourceBeatmapVersion: "3.3.0", sourceDifficultyHash: `sha256:${"2".repeat(64)}`, spawnTiming: structuredClone(spawnTiming), notePalette: null, contentHash: flowChart.contentHash }], ...(converterProfile ? { converterProfile: structuredClone(converterProfile) } : {}) }, presentationSuggestion: null
   };
 }
 /** @param {Uint8Array} bytes @param {(metadata: Record<string, unknown>) => Record<string, unknown>} transform */
@@ -865,10 +870,12 @@ async function verifyFlowAdmissionSecurity(packageRecord, audio, declaredAudioHa
   rehashFlow(eventPackage);
   const validRuntime = createAeroContentRuntime();
   await validRuntime.loadPackage({ package: eventPackage, packageHash: `sha256:${hashJson(eventPackage)}`, assets: [{ path: "song.ogg", bytes: audio }] });
-  assert.equal(validRuntime.getSnapshot().variants.length, 6);
+  assert.equal(validRuntime.getSnapshot().variants.length, 5);
   const validFlowVariants = validRuntime.getSnapshot().variants.filter((variant) => variant.mode === "flow");
+  assert.equal(validFlowVariants.length, 1);
+  assert.equal(validFlowVariants[0].rulesetId, "flow_colliders_v1");
   const gridEvents = validRuntime.getSnapshot().resolvedEvents;
-  await validRuntime.selectVariant(validFlowVariants[1].variantId);
+  await validRuntime.selectVariant(validFlowVariants[0].variantId);
   const colliderEvents = validRuntime.getSnapshot().resolvedEvents;
   assert.equal(colliderEvents.every((event, index) => event.authoredBeat === gridEvents[index].authoredBeat), true, "strict Flow admission preserves shared immutable authored event identity");
   for (const snapshot of [validRuntime.getSnapshot(), { resolvedEvents: gridEvents }]) deepScan(snapshot, (key) => assert.equal(["collisionSettings", "colliderRadius", "wristEvidence", "noseEvidence", "trajectory", "segmentEndpoint", "confidence", "calibrationId", "frameId", "sourceContact", "contactEpisode"].includes(key), false, `public snapshot must omit ${key}`));

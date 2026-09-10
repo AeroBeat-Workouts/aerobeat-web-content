@@ -13,9 +13,11 @@ import {
 import { canonicalJson, cloneFrozenData, dataError, hasExactDataKeys, isPlainDataRecord, runtimePackageDataLimits, sha256Hex } from "./runtime-data.js";
 import { validateSpawnTiming } from "./spawn-timing.js";
 
-const FLOW_GRID_RULESET_ID = "flow_grid_v2";
 const FLOW_COLLIDERS_RULESET_ID = "flow_colliders_v1";
-const FLOW_RULESET_VARIANTS = Object.freeze([FLOW_GRID_RULESET_ID, FLOW_COLLIDERS_RULESET_ID]);
+/** Retired Flow Grid ruleset, recognized only in historical stored bytes. */
+const FLOW_GRID_RULESET_ID = "flow_grid_v2";
+/** Current sole variant; the two-variant legacy bind remains accepted for historical reads. */
+const FLOW_RULESET_VARIANTS = Object.freeze([FLOW_COLLIDERS_RULESET_ID]);
 
 /** @typedef {Readonly<Record<string, unknown>>} DataRecord */
 /** @typedef {import("@aerobeat/web-contracts").AeroEffectiveNotePalette} AeroEffectiveNotePalette */
@@ -64,7 +66,7 @@ export async function validateRuntimePackage(packageValue, options = {}) {
     chartIds.add(chartId);
     const beats = requireArray(chart.beats, "chart_beats_invalid");
     validateEvents(beats, chart.mode === "boxing", beatToTimelineMs);
-    let rulesetId = "flow_grid_v2";
+    let rulesetId = FLOW_COLLIDERS_RULESET_ID;
     let recipeId = null;
     /** @type {string[]} */
     let modifierIds = [];
@@ -74,7 +76,8 @@ export async function validateRuntimePackage(packageValue, options = {}) {
     let runtimeIdentities = Object.freeze([]);
     if (chart.mode === "flow") {
       flowCount += 1;
-      if (chart.schemaId !== "aerobeat.chart.flow.v5" || chart.schemaVersion !== 5 || chart.rulesetId !== FLOW_GRID_RULESET_ID || !hasExactFlowRulesetVariants(chart.rulesetVariants)) throw dataError("flow_chart_schema_invalid", "Flow chart must bind the exact ordered Flow Grid and Flow Colliders successor identity");
+      const legacyFlowGridAccepted = chart.rulesetId === FLOW_GRID_RULESET_ID && hasExactLegacyFlowRulesetVariants(chart.rulesetVariants);
+      if (chart.schemaId !== "aerobeat.chart.flow.v5" || chart.schemaVersion !== 5 || (chart.rulesetId !== FLOW_COLLIDERS_RULESET_ID && !legacyFlowGridAccepted) || !hasExactFlowRulesetVariants(chart.rulesetVariants)) throw dataError("flow_chart_schema_invalid", "Flow chart must bind the sole Flow (colliders) ruleset identity; historical two-variant Flow Grid binds require reimport");
       if (!hasExactDataKeys(chart, ["schemaId", "schemaVersion", "recordVersion", "rulesetId", "rulesetVariants", "chartId", "chartName", "mode", "difficulty", "notePalette", "contentHash", "beats"])) throw dataError("flow_chart_shape_invalid", "Flow chart must contain only the exact successor fields and one shared beats array");
       validateFlowPaletteReference(chart.notePalette, notePalette);
       const expectedFlowContentHash = `sha256:${await sha256Hex(canonicalJson({ beats, rulesetId: chart.rulesetId, rulesetVariants: chart.rulesetVariants, notePalette: chart.notePalette }))}`;
@@ -82,9 +85,10 @@ export async function validateRuntimePackage(packageValue, options = {}) {
       flowContentHash = expectedFlowContentHash;
       declaredChartHash = expectedFlowContentHash.slice(7);
       scoringChartHash = await sha256Hex(canonicalJson(flowScoringProjection(chart)));
+      // Sole Flow runtime variant: the colliders ruleset bound to the authored chart ID,
+      // even for legacy two-variant Flow Grid reads (historical readability).
       runtimeIdentities = Object.freeze([
-        Object.freeze({ rulesetId: FLOW_GRID_RULESET_ID, variantId: chartId, ranked: true, localOnly: false }),
-        Object.freeze({ rulesetId: FLOW_COLLIDERS_RULESET_ID, variantId: `${chartId}~ruleset-${FLOW_COLLIDERS_RULESET_ID}`, ranked: false, localOnly: true })
+        Object.freeze({ rulesetId: FLOW_COLLIDERS_RULESET_ID, variantId: chartId, ranked: true, localOnly: false })
       ]);
     } else if (chart.mode === "boxing") {
       if (Object.hasOwn(chart, "notePalette") || Object.hasOwn(chart, "paletteHash")) throw dataError("boxing_palette_forbidden", "Boxing charts cannot carry Flow note-palette fields");
@@ -97,7 +101,7 @@ export async function validateRuntimePackage(packageValue, options = {}) {
       requireHashString(prototype.rulesetHash, "ruleset_hash_invalid");
       rulesetId = requireString(prototype.rulesetId, "ruleset_invalid");
       recipeId = requireString(prototype.recipeId, "recipe_invalid");
-      if (!rulesetIds.includes(/** @type {"flow_grid_v1" | "flow_grid_v2" | "flow_colliders_v1" | "boxing_semantic_track_v1" | "boxing_spatial_grid_v1"} */ (rulesetId)) || (rulesetId !== "boxing_semantic_track_v1" && rulesetId !== "boxing_spatial_grid_v1")) throw dataError("ruleset_invalid", "Boxing ruleset is unsupported");
+      if (!rulesetIds.includes(/** @type {"flow_grid_v1" | "flow_colliders_v1" | "boxing_semantic_track_v1" | "boxing_spatial_grid_v1"} */ (rulesetId)) || (rulesetId !== "boxing_semantic_track_v1" && rulesetId !== "boxing_spatial_grid_v1")) throw dataError("ruleset_invalid", "Boxing ruleset is unsupported");
       if (!conversionRecipeIds.includes(/** @type {"row_family_balanced_height_v1" | "cut_family_source_height_v1"} */ (recipeId))) throw dataError("recipe_invalid", "Conversion recipe is unsupported");
       if (options.supportedRulesetIds && !options.supportedRulesetIds.includes(rulesetId)) throw dataError("ruleset_unavailable", `Ruleset ${rulesetId} is unavailable`);
       if (options.supportedRecipeIds && !options.supportedRecipeIds.includes(recipeId)) throw dataError("recipe_unavailable", `Recipe ${recipeId} is unavailable`);
@@ -155,6 +159,21 @@ export async function validateRuntimePackage(packageValue, options = {}) {
     variants: Object.freeze(variants),
     source: isPlainDataRecord(packageRecord.source) ? packageRecord.source : Object.freeze(Object.create(null))
   });
+}
+
+/**
+ * Enforce the playback reimport boundary for the retired Flow Grid ruleset.
+ *
+ * Historical two-variant Flow Grid bytes remain readable by {@link validateRuntimePackage}
+ * (list/export/management), but stored packages bound to `flow_grid_v2` must be
+ * reimported before playback. Authoring/persistence layers call this before any
+ * playback admission.
+ *
+ * @param {unknown} packageValue
+ */
+export function assertCurrentFlowRulesetBinding(packageValue) {
+  const charts = isPlainDataRecord(packageValue) ? packageValue.charts : undefined;
+  if (Array.isArray(charts) && charts.some((chartValue) => isPlainDataRecord(chartValue) && chartValue.mode === "flow" && chartValue.rulesetId === FLOW_GRID_RULESET_ID)) throw dataError("flow_grid_reimport_required", "Stored package binds the retired Flow Grid ruleset and must be reimported for playback");
 }
 
 /**
@@ -486,13 +505,15 @@ function validateFlowTraceBinding(traceValue, palette, flowContentHash, source) 
   if (!hasExactDataKeys(flowTrace, ["difficulty", "events", "obstacleContract", "sourceHash", "sourceInfoFormat", "sourceInfoVersion", "sourceInfoHash", "sourceDifficultyPath", "sourceBeatmapFormat", "sourceBeatmapVersion", "sourceDifficultyHash", "spawnTiming", "rulesetId", "rulesetVariants", "notePalette", "contentHash"])) throw dataError("flow_trace_invalid", "Flow conversion trace must contain only exact authored successor fields");
   try { validateFlowPaletteReference(flowTrace.notePalette, palette); }
   catch { throw dataError("flow_trace_invalid", "Flow conversion trace must bind the package note palette reference"); }
-  if (flowTrace.rulesetId !== FLOW_GRID_RULESET_ID || !hasExactFlowRulesetVariants(flowTrace.rulesetVariants) || flowTrace.obstacleContract !== "normalized_obstacle_v2") throw dataError("flow_trace_invalid", "Flow conversion trace must bind the exact ordered successor rulesets and obstacle contract");
+  if ((flowTrace.rulesetId !== FLOW_COLLIDERS_RULESET_ID && flowTrace.rulesetId !== FLOW_GRID_RULESET_ID) || !hasExactFlowRulesetVariants(flowTrace.rulesetVariants) || flowTrace.obstacleContract !== "normalized_obstacle_v2") throw dataError("flow_trace_invalid", "Flow conversion trace must bind the sole Flow (colliders) ruleset variant, or the exact historical two-variant Flow Grid bind, and obstacle contract");
   for (const key of ["sourceHash", "sourceInfoFormat", "sourceInfoVersion", "sourceInfoHash", "sourceDifficultyPath", "sourceBeatmapFormat", "sourceBeatmapVersion", "sourceDifficultyHash"]) if (flowTrace[key] !== source[key]) throw dataError("flow_trace_invalid", "Flow conversion trace must bind exact package source provenance");
   if (flowTrace.contentHash !== flowContentHash) throw dataError("flow_trace_content_hash_mismatch", "Flow conversion trace must bind the exact Flow content hash");
 }
 
 /** @param {unknown} value */
-function hasExactFlowRulesetVariants(value) { return Array.isArray(value) && value.length === FLOW_RULESET_VARIANTS.length && value.every((entry, index) => entry === FLOW_RULESET_VARIANTS[index]); }
+function hasExactFlowRulesetVariants(value) { return Array.isArray(value) && ((value.length === 1 && value[0] === FLOW_COLLIDERS_RULESET_ID) || hasExactLegacyFlowRulesetVariants(value)); }
+/** @param {unknown} value */
+function hasExactLegacyFlowRulesetVariants(value) { return Array.isArray(value) && value.length === 2 && value[0] === FLOW_GRID_RULESET_ID && value[1] === FLOW_COLLIDERS_RULESET_ID; }
 
 /** @param {DataRecord} packageValue */
 async function semanticParityHash(packageValue) { return sha256Hex(canonicalJson(semanticParityProjection(packageValue))); }

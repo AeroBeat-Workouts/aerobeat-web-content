@@ -51,7 +51,7 @@ async function verifyContext(origin, secure) {
     try { await page.locator("aero-content-runtime[data-ready='true']").waitFor(); }
     catch (cause) { throw new Error(`Browser runtime did not become ready: ${consoleFailures.join(" | ") || (cause instanceof Error ? cause.message : "unknown failure")}`); }
     const runtime = page.locator("aero-content-runtime");
-    assert.match(await runtime.innerText(), /aero\.content\.library · implemented · 6 variants/u);
+    assert.match(await runtime.innerText(), /aero\.content\.library · implemented · 5 variants/u);
     assert.equal(await runtime.getAttribute("data-note-center-ms"), "700", "browser note timing includes anchor and stop at S <= beat");
     assert.equal(await runtime.getAttribute("data-interval-start-ms"), "1200", "browser interval start crosses the anchored stopped first tempo segment");
     assert.equal(await runtime.getAttribute("data-interval-end-ms"), "1700", "browser interval end uses the later tempo segment through the same mapper");
@@ -71,18 +71,20 @@ async function verifyContext(origin, secure) {
     assert.equal(evidence.projectedNoteColor, "#FF0000");
     assert.equal(evidence.projectedObstacleHasColor, false);
     assert.equal(evidence.projectedBombHasColor, false);
-    assert.deepEqual(evidence.flowRulesets, ["flow_grid_v2", "flow_colliders_v1"]);
+    assert.deepEqual(evidence.flowRulesets, ["flow_colliders_v1"]);
     assert.equal(evidence.sharedFlowEventObjects, true);
     assert.equal(evidence.distinctFlowScoreIdentities, true);
-    assert.deepEqual(evidence.collidersPolicy, [null, false, true]);
+    assert.deepEqual(evidence.collidersPolicy, [null, true, false]);
     assert.deepEqual(evidence.flowCompositeEvidence, {
       distinctVariantIds:true,
-      sharedChartId:true,
-      sharedMapHash:true,
+      sharedChartId:false,
+      sharedMapHash:false,
       distinctScoreHash:true,
-      identicalAuthoredEvents:true,
-      rulesets:["flow_grid_v2","flow_colliders_v1"],
-      bases:["browser-flow","browser-flow~ruleset-flow_colliders_v1"],
+      identicalAuthoredEvents:false,
+      rulesets:["flow_colliders_v1","flow_colliders_v1"],
+      bases:[null,"browser-flow"],
+      baseRanked:true,
+      baseLocalOnly:false,
       envelopeAgreement:true,
       gridCacheStable:true
     });
