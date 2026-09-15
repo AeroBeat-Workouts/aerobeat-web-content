@@ -16,6 +16,8 @@ import { validateSpawnTiming } from "./spawn-timing.js";
 const FLOW_COLLIDERS_RULESET_ID = "flow_colliders_v1";
 /** Retired Flow Grid ruleset, recognized only in historical stored bytes. */
 const FLOW_GRID_RULESET_ID = "flow_grid_v2";
+/** z7nw — the sole newly-created Boxing variant for new imports (single variant, no conversion recipe). */
+const BOXING_COLLIDER_RULESET_ID = "boxing_collider_v1";
 /** Current sole variant; the two-variant legacy bind remains accepted for historical reads. */
 const FLOW_RULESET_VARIANTS = Object.freeze([FLOW_COLLIDERS_RULESET_ID]);
 
@@ -52,7 +54,8 @@ export async function validateRuntimePackage(packageValue, options = {}) {
   const spawnTiming = validateSpawnTiming(packageSource.spawnTiming, bpm);
   validateSpawnTimingTrace(packageRecord.conversionTrace, spawnTiming);
   const charts = requireArray(packageRecord.charts, "charts_invalid");
-  if (charts.length !== 5) throw dataError("chart_count_invalid", "Package must contain Flow plus exactly four Boxing prototype charts");
+  // z7nw — new imports carry Flow + one collider chart; legacy stored packages carry the four-chart matrix.
+  if (charts.length !== 2 && charts.length !== 5) throw dataError("chart_count_invalid", "Package must contain Flow plus either one collider or four legacy Boxing charts");
   const chartIds = new Set();
   /** @type {RuntimeVariant[]} */
   const variants = [];
@@ -100,19 +103,29 @@ export async function validateRuntimePackage(packageValue, options = {}) {
       requireHashString(prototype.recipeHash, "recipe_hash_invalid");
       requireHashString(prototype.rulesetHash, "ruleset_hash_invalid");
       rulesetId = requireString(prototype.rulesetId, "ruleset_invalid");
-      recipeId = requireString(prototype.recipeId, "recipe_invalid");
-      if (!rulesetIds.includes(/** @type {"flow_grid_v1" | "flow_colliders_v1" | "boxing_semantic_track_v1" | "boxing_spatial_grid_v1"} */ (rulesetId)) || (rulesetId !== "boxing_semantic_track_v1" && rulesetId !== "boxing_spatial_grid_v1")) throw dataError("ruleset_invalid", "Boxing ruleset is unsupported");
-      if (!conversionRecipeIds.includes(/** @type {"row_family_balanced_height_v1" | "cut_family_source_height_v1"} */ (recipeId))) throw dataError("recipe_invalid", "Conversion recipe is unsupported");
+      const colliderVariant = rulesetId === BOXING_COLLIDER_RULESET_ID;
+      if (colliderVariant) {
+        // z7nw — the single collider variant carries no conversion recipe identity at all.
+        if (Object.hasOwn(prototype, "recipeId")) throw dataError("recipe_invalid", "Collider Boxing chart must carry no conversion recipe identity");
+      } else {
+        recipeId = requireString(prototype.recipeId, "recipe_invalid");
+        if (!conversionRecipeIds.includes(/** @type {"row_family_balanced_height_v1" | "cut_family_source_height_v1"} */ (recipeId))) throw dataError("recipe_invalid", "Conversion recipe is unsupported");
+      }
+      if (!rulesetIds.includes(/** @type {"flow_grid_v1" | "flow_colliders_v1" | "boxing_semantic_track_v1" | "boxing_spatial_grid_v1" | "boxing_collider_v1"} */ (rulesetId))) throw dataError("ruleset_invalid", "Boxing ruleset is unsupported");
       if (options.supportedRulesetIds && !options.supportedRulesetIds.includes(rulesetId)) throw dataError("ruleset_unavailable", `Ruleset ${rulesetId} is unavailable`);
-      if (options.supportedRecipeIds && !options.supportedRecipeIds.includes(recipeId)) throw dataError("recipe_unavailable", `Recipe ${recipeId} is unavailable`);
+      if (options.supportedRecipeIds && !colliderVariant && !options.supportedRecipeIds.includes(/** @type {string} */ (recipeId))) throw dataError("recipe_unavailable", `Recipe ${recipeId} is unavailable`);
       modifierIds = normalizeModifiers(prototype.modifiers);
       validateEventModifierIdentity(beats, modifierIds);
       const sourceHash = requireHashString(prototype.sourceHash, "source_hash_invalid");
       declaredChartHash = requireHashString(prototype.contentHash, "chart_hash_invalid").slice(7);
-      const actualChartHash = await sha256Hex(canonicalJson(chartHashProjection(beats, recipeId, rulesetId, `sha256:${sourceHash.slice(7)}`, converterProfile)));
+      // z7nw — the collider content projection omits the recipeId key ENTIRELY, matching authoring exactly.
+      const projected = colliderVariant
+        ? { beats, sourceHash: `sha256:${sourceHash.slice(7)}`, rulesetId, ...(converterProfile ? { converterProfile } : {}) }
+        : chartHashProjection(beats, /** @type {string} */ (recipeId), rulesetId, `sha256:${sourceHash.slice(7)}`, converterProfile);
+      const actualChartHash = await sha256Hex(canonicalJson(projected));
       if (actualChartHash !== declaredChartHash) throw dataError("chart_hash_mismatch", `Chart ${chartId} failed content-hash verification`);
       scoringChartHash = declaredChartHash;
-      matrix.add(`${recipeId}|${rulesetId}`);
+      if (!colliderVariant) matrix.add(`${recipeId}|${rulesetId}`);
       runtimeIdentities = Object.freeze([Object.freeze({ rulesetId, variantId: chartId, ranked: true, localOnly: false })]);
     } else {
       throw dataError("chart_mode_invalid", "Only Flow and Boxing charts are supported");
@@ -138,8 +151,15 @@ export async function validateRuntimePackage(packageValue, options = {}) {
   }
   if (flowCount !== 1) throw dataError("flow_variant_invalid", "Package must contain exactly one Flow chart");
   validateFlowTraceBinding(packageRecord.conversionTrace, notePalette, flowContentHash, packageSource);
-  const expectedMatrix = conversionRecipeIds.flatMap((recipe) => ["boxing_semantic_track_v1", "boxing_spatial_grid_v1"].map((ruleset) => `${recipe}|${ruleset}`));
-  if (!expectedMatrix.every((identity) => matrix.has(identity))) throw dataError("boxing_matrix_incomplete", "Package does not contain all four Boxing prototype variants");
+  // z7nw — shape separation: NEW = sole collider variant and no legacy matrix identity;
+  // LEGACY stored = all four recipe/ruleset combinations and no collider variant. Mixed shapes fail closed.
+  const boxingCharts = charts.filter((chartValue) => isPlainDataRecord(chartValue) && chartValue.mode === "boxing");
+  const colliderCount = boxingCharts.filter((chartValue) => isPlainDataRecord(/** @type {unknown} */ (chartValue).prototype) && /** @type {Readonly<Record<string, unknown>>} */ (chartValue.prototype).rulesetId === BOXING_COLLIDER_RULESET_ID).length;
+  if (colliderCount === 1 && matrix.size === 0 && boxingCharts.length === 1) { /* current new-import shape */ }
+  else if (colliderCount === 0) {
+    const expectedMatrix = conversionRecipeIds.flatMap((recipe) => ["boxing_semantic_track_v1", "boxing_spatial_grid_v1"].map((ruleset) => `${recipe}|${ruleset}`));
+    if (!expectedMatrix.every((identity) => matrix.has(identity))) throw dataError("boxing_matrix_incomplete", "Legacy package does not contain all four Boxing prototype variants");
+  } else throw dataError("boxing_shape_mixed", "Boxing charts mix collider and legacy variants; each package shape must be consistent");
   validateSets(packageRecord.sets, chartIds);
   rejectPrivateEvidence(packageRecord);
   const packageHashValue = await sha256Hex(canonicalJson(packageRecord));
@@ -222,7 +242,12 @@ export async function composeRuntimeVariant(base, requestedModifiers, packageId)
     const converterProfile = prototype.converterProfile === undefined ? null : await normalizeConverterProfile(prototype.converterProfile);
     prototype.modifiers = [...modifiers];
     if (converterProfile) prototype.converterProfile = cloneMutable(converterProfile);
-    prototype.contentHash = `sha256:${await sha256Hex(canonicalJson(chartHashProjection(beats, base.recipeId, base.rulesetId, requireHashString(prototype.sourceHash, "source_hash_invalid"), converterProfile)))}`;
+    const sourceHash = requireHashString(prototype.sourceHash, "source_hash_invalid");
+    // z7nw — collider composites keep the recipeId-absent projection; legacy composites keep recipe identity.
+    const projected = Object.hasOwn(prototype, "recipeId")
+      ? chartHashProjection(beats, /** @type {string} */ (base.recipeId), base.rulesetId, sourceHash, converterProfile)
+      : { beats, sourceHash, rulesetId: base.rulesetId, ...(converterProfile ? { converterProfile } : {}) };
+    prototype.contentHash = `sha256:${await sha256Hex(canonicalJson(projected))}`;
     chartCopy.prototype = prototype;
   } else {
     chartCopy.contentHash = `sha256:${await sha256Hex(canonicalJson({ beats, rulesetId: chartCopy.rulesetId, rulesetVariants: chartCopy.rulesetVariants, notePalette: chartCopy.notePalette }))}`;
@@ -263,7 +288,8 @@ async function validatePackageConverterProfile(packageRecord) {
   const traceProfile = await normalizeConverterProfile(trace.converterProfile);
   if (!sameProfile(profile, traceProfile)) throw dataError("converter_profile_trace_mismatch", "Conversion trace profile must exactly match package source provenance");
   const boxing = requireArray(trace.boxing, "converter_profile_boxing_trace_mismatch");
-  if (boxing.length !== 4) throw dataError("converter_profile_boxing_trace_mismatch", "Profile-authored packages require four Boxing trace profiles");
+  // z7nw — new-import packages carry one collider trace; legacy stored packages carry four.
+  if (boxing.length !== 1 && boxing.length !== 4) throw dataError("converter_profile_boxing_trace_mismatch", "Profile-authored packages require one collider or four legacy Boxing trace profiles");
   for (const value of boxing) {
     const boxingTrace = requireRecord(value, "converter_profile_boxing_trace_mismatch");
     const boxingProfile = await normalizeConverterProfile(boxingTrace.converterProfile);

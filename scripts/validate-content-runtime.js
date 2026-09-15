@@ -20,12 +20,9 @@ import { cloneFrozenData } from "../src/runtime-data.js";
 
 const BOXING_PUNCH_CASES=Object.freeze([Object.freeze({type:"straight_left",hand:"left"}),Object.freeze({type:"straight_right",hand:"right"}),Object.freeze({type:"hook_left",hand:"left"}),Object.freeze({type:"hook_right",hand:"right"}),Object.freeze({type:"uppercut_left",hand:"left"}),Object.freeze({type:"uppercut_right",hand:"right"})]);
 const BOXING_FIXED_TYPES=Object.freeze(["squat","guard","weave_left","weave_right"]);
-const BOXING_VARIANT_MATRIX=Object.freeze([["row_family_balanced_height_v1","boxing_semantic_track_v1","boxing_lanes"],["row_family_balanced_height_v1","boxing_spatial_grid_v1","boxing_spatial_grid"],["cut_family_source_height_v1","boxing_semantic_track_v1","boxing_lanes"],["cut_family_source_height_v1","boxing_spatial_grid_v1","boxing_spatial_grid"]].map((entry)=>Object.freeze(entry)));
-const BOXING_MODE_COLOR_ROWS=Object.freeze([
-  ["boxing_lanes","straight_left","#FF0000"],["boxing_lanes","straight_right","#808080"],["boxing_lanes","hook_left","#FF0000"],["boxing_lanes","hook_right","#808080"],["boxing_lanes","uppercut_left","#FF0000"],["boxing_lanes","uppercut_right","#808080"],
-  ["boxing_spatial_grid","straight_left","#FF0000"],["boxing_spatial_grid","straight_right","#808080"],["boxing_spatial_grid","hook_left","#FF0000"],["boxing_spatial_grid","hook_right","#808080"],["boxing_spatial_grid","uppercut_left","#FF0000"],["boxing_spatial_grid","uppercut_right","#808080"]
-].map((row)=>Object.freeze(row)));
-const BOXING_MODE_FIXED_ROWS=Object.freeze([["boxing_lanes","guard",false],["boxing_lanes","squat",false],["boxing_lanes","weave_left",false],["boxing_lanes","weave_right",false],["boxing_spatial_grid","guard",false],["boxing_spatial_grid","squat",false],["boxing_spatial_grid","weave_left",false],["boxing_spatial_grid","weave_right",false]].map((row)=>Object.freeze(row)));
+// z7nw — new imports expose exactly one Boxing variant: the sole collider ruleset.
+const BOXING_COLLIDER_RULESET_ID="boxing_collider_v1";
+const LEGACY_BOXING_VARIANTS=Object.freeze([["row_family_balanced_height_v1","boxing_semantic_track_v1"],["row_family_balanced_height_v1","boxing_spatial_grid_v1"],["cut_family_source_height_v1","boxing_semantic_track_v1"],["cut_family_source_height_v1","boxing_spatial_grid_v1"]].map((entry)=>Object.freeze(entry)));
 const spawnTiming = Object.freeze({ schema:"aerobeat/beatsaber_spawn_timing",version:1,algorithm:"beatsaber_core_hjd_v1",bpm:120,noteJumpMovementSpeed:10,noteJumpStartBeatOffset:1,maxHalfJumpDistance:17.999,startHalfJumpDurationBeats:4,minimumHalfJumpDurationBeats:.25,halfJumpDurationBeats:3,reactionTimeMs:1500,jumpDistanceMeters:30 });
 const audioBytes = new TextEncoder().encode("deterministic-audio-fixture");
 const audioHash = hashBytes(audioBytes);
@@ -37,6 +34,7 @@ const gameplayGeometry = Object.freeze({ schema:"aerobeat/obstacle_gameplay_geom
 const reachConverterProfile = Object.freeze({ schema: "aerobeat/prototype_profile", version: 1, profileId: "aero.converter.prototype-reach", profileVersion: "1.0.0", class: "converter_regeneration", label: "Prototype Reach Converter (Experimental)", experimental: true, settings: Object.freeze({ guardRelocationRadius: 2, reachAllowanceSubcells: 1 }), contentHash: "e37f8b527ed5ce86738ce22007fc963f83bccd737893fb4728d3b83eaa044eea" });
 
 await verifyFlowAdmissionSecurity(basePackage, audioBytes, audioHash);
+await verifyBoxingShapeSeparation(basePackage);
 
 assert.equal(aeroContentServiceId, "aero.content.library");
 assert.equal(aeroContentRuntimeDescriptor.implementationState, "implemented");
@@ -44,9 +42,10 @@ assert.equal(aeroContentRuntimeCapabilities.playlistAllowlistRequired, false);
 assert.equal(maximumAuthoredTimelineMs, 86_400_000);
 const successorFixture = JSON.parse(await readFile(new URL("../fixtures/flow-colliders-3c9d-successor-v1.json", import.meta.url), "utf8"));
 assert.deepEqual(successorFixture.expected, {
-  packageHash: "sha256:b4e0d16058ceaa60fe118e2cbdbcf0d518eb37384bec4d1a5a3be658d351ebb1",
+  // z7nw — new-shape successor bytes: Flow + sole collider. Flow hash is unchanged (Flow conversion untouched).
+  packageHash: "sha256:8d87bd5f929e51699b276c41da2fea3a1c1d59a08da17eff40d9d487a0c521dc",
   flowContentHash: "sha256:9c48a53b0fac85d3798756a38797fccf1f88360ac38e312a5b4d103d98d1d39d",
-  semanticParityHash: "sha256:63fbd288ce7694528a83be4275a69fc176eda11b3d62c072694b865e0611b525"
+  semanticParityHash: "sha256:ae0da15a7b7c9f77cfe29f3dd364f75e9740354bf667eae837bc2e62bff71c01"
 });
 const successorEnvelope = makeAeroPackage(successorFixture.package, successorFixture.expected.packageHash.slice(7), []);
 const parsedSuccessorEnvelope = await parseAeroPackage(successorEnvelope);
@@ -57,7 +56,7 @@ const successorFlowVariants = successorValidation.variants.filter((variant) => v
 assert.equal(successorFlowChart.contentHash, successorFixture.expected.flowContentHash);
 assert.equal(successorValidation.packageHash.value, successorFixture.expected.packageHash.slice(7));
 assert.equal(successorValidation.semanticParityHash.value, successorFixture.expected.semanticParityHash.slice(7));
-assert.equal(successorValidation.variants.length, 5, "validated v6 package exposes the single Flow variant plus four Boxing variants");
+assert.equal(successorValidation.variants.length, 2, "z7nw: validated new-shape v6 package exposes the single Flow variant plus the sole collider Boxing variant");
 assert.deepEqual(successorFlowVariants.map((variant) => [variant.variantId, variant.rulesetId, variant.recipeId, variant.ranked, variant.localOnly]), [
   [successorFlowChart.chartId, "flow_colliders_v1", null, true, false]
 ]);
@@ -65,6 +64,13 @@ const successorFlowVariant = successorFlowVariants[0];
 assert.equal(successorFlowVariant.chart, successorFlowChart, "the sole Flow variant exposes the exact frozen chart object");
 const successorScoringChart = structuredClone(successorFlowChart); successorScoringChart.schemaId = "aerobeat.chart.flow.v4"; successorScoringChart.schemaVersion = 4; delete successorScoringChart.rulesetVariants; delete successorScoringChart.notePalette; delete successorScoringChart.contentHash;
 assert.equal(successorFlowVariant.scoreIdentityHash.value, hashJson({ packageId: successorValidation.packageId, chartId: successorFlowChart.chartId, rulesetId: "flow_colliders_v1", recipeId: null, modifierIds: [], mapHash: hashJson(successorScoringChart), ranked: true }), "the single Flow variant owns the colliders score partition over the v4-projected scoring chart");
+// z7nw — positive new-shape coverage: exactly two variants (Flow + the sole collider),
+// collider ranked/localOnly as authored and carrying no conversion recipe identity.
+const successorBoxingVariants = successorValidation.variants.filter((variant) => variant.mode === "boxing");
+assert.deepEqual(successorBoxingVariants.map((variant) => [variant.variantId, variant.rulesetId, variant.recipeId, variant.ranked, variant.localOnly]), [
+  [`ab-chart-${successorFlowChart.chartId.replace(/^ab-chart-/, "").replace(/-flow-easy$/, "-boxing-collider-easy")}`, BOXING_COLLIDER_RULESET_ID, null, true, false]
+]);
+assert.equal(Object.hasOwn(successorBoxingVariants[0].chart.prototype, "recipeId"), false, "new-shape collider prototype carries no conversion recipe identity");
 const compositeModifiers = ["obstacle_visual_only"];
 const [successorColliderComposite, repeatedColliderComposite] = await Promise.all([
   composeRuntimeVariant(successorFlowVariant, compositeModifiers, successorValidation.packageId),
@@ -104,7 +110,7 @@ const legacyFlowGridPackage = structuredClone(successorFixture.package);
 }
 const legacyFlowGridHash = hashJson(legacyFlowGridPackage);
 const legacyFlowGridReadable = await validateRuntimePackage(legacyFlowGridPackage, { declaredPackageHash: `sha256:${legacyFlowGridHash}` });
-assert.equal(legacyFlowGridReadable.variants.length, 5, "legacy two-variant Flow Grid bytes remain readable for historical reads");
+assert.equal(legacyFlowGridReadable.variants.length, 2, "z7nw: legacy two-variant Flow Grid bytes over new-shape boxing charts remain readable for historical reads");
 assert.deepEqual(legacyFlowGridReadable.variants.filter((variant) => variant.mode === "flow").map((variant) => [variant.variantId, variant.rulesetId, variant.ranked, variant.localOnly]), [[successorFlowChart.chartId, "flow_colliders_v1", true, false]], "legacy bytes resolve one playable colliders runtime variant bound to the authored chart ID");
 assert.throws(() => assertCurrentFlowRulesetBinding(legacyFlowGridPackage), hasCode("flow_grid_reimport_required"), "retired Flow Grid binds are reimport-required for playback at the authoring/persistence boundary");
 assert.doesNotThrow(() => assertCurrentFlowRulesetBinding(successorFixture.package), "current single-variant colliders bindings pass the playback boundary");
@@ -126,10 +132,10 @@ for (const malformed of [
   { anchorMs: 0, tempoSegments: [{ startBeat: 0, bpm: 120 }], stopSegments: [{ startBeat: 1, durationMs: 0 }], timeSignatureSegments: [{ startBeat: 0, numerator: 4, denominator: 4 }] }
 ]) assert.throws(() => createAuthoredBeatToTimelineMs(malformed), TypeError);
 const legacyValidation = await validateRuntimePackage(basePackage);
-assert.equal(legacyValidation.variants.length, 5);
+assert.equal(legacyValidation.variants.length, 2, "z7nw: new-shape package exposes two variants");
 assert.throws(() => cloneFrozenData(Array(100_000).fill(null)), hasCode("data_too_large"), "generic data cloning must retain its 100,000-item default");
 const largeCanonicalPackage = packageWithFlowEvents(basePackage, 20_000);
-assert.equal((await validateRuntimePackage(largeCanonicalPackage)).variants.length, 5, "package validation must admit a valid canonical package above the generic item bound");
+assert.equal((await validateRuntimePackage(largeCanonicalPackage)).variants.length, 2, "package validation must admit a valid canonical package above the generic item bound");
 const excessiveCanonicalPackage = packageWithFlowEvents(basePackage, 84_000);
 await assert.rejects(() => validateRuntimePackage(excessiveCanonicalPackage), hasCode("data_too_large"), "package validation must remain bounded at 500,000 items");
 const cyclicPackage = structuredClone(basePackage); cyclicPackage.loop = cyclicPackage;
@@ -144,18 +150,20 @@ const legacyComposite = await composeRuntimeVariant(legacyBase, ["no_squats"], b
 const legacyCompositeId = `${legacyBase.chartId}~mods-${hashJson({ baseChartId: legacyBase.chartId, modifiers: ["no_squats"] }).slice(0, 12)}`;
 assert.deepEqual([legacyComposite.variantId, legacyComposite.chartId], [legacyCompositeId, legacyCompositeId], "Boxing composite public identities retain the pre-Flow-Colliders formula");
 assert.equal(Object.hasOwn(legacyComposite.chart.prototype, "converterProfile"), false);
-assert.equal(legacyComposite.chart.prototype.contentHash, `sha256:${hashJson({ beats: legacyComposite.chart.beats, recipeId: legacyComposite.recipeId, rulesetId: legacyComposite.rulesetId, sourceHash: legacyComposite.chart.prototype.sourceHash })}`);
+// z7nw — collider composites keep the recipeId-absent content projection.
+assert.equal(legacyComposite.chart.prototype.contentHash, `sha256:${hashJson({ beats: legacyComposite.chart.beats, sourceHash: legacyComposite.chart.prototype.sourceHash, rulesetId: legacyComposite.rulesetId })}`);
+assert.equal(legacyComposite.recipeId, null);
 const profilePackage = await makePackage(audioHash, canonicalConverterProfile);
 const profileValidation = await validateRuntimePackage(profilePackage);
-assert.equal(profileValidation.variants.length, 5);
-assert.deepEqual(profileValidation.variants.filter((entry) => entry.mode === "boxing").map((entry) => entry.chart.prototype.converterProfile.contentHash), Array(4).fill(canonicalConverterProfile.contentHash));
+assert.equal(profileValidation.variants.length, 2);
+assert.deepEqual(profileValidation.variants.filter((entry) => entry.mode === "boxing").map((entry) => entry.chart.prototype.converterProfile.contentHash), [canonicalConverterProfile.contentHash]);
 const reachPackage = await makePackage(audioHash, reachConverterProfile);
-assert.equal((await validateRuntimePackage(reachPackage)).variants.length, 5);
+assert.equal((await validateRuntimePackage(reachPackage)).variants.length, 2);
 const profileBase = profileValidation.variants.find((entry) => entry.mode === "boxing");
 assert.ok(profileBase);
 const profileComposite = await composeRuntimeVariant(profileBase, ["no_squats"], profilePackage.packageId);
 assert.equal(canonical(profileComposite.chart.prototype.converterProfile), canonical(canonicalConverterProfile));
-assert.equal(profileComposite.chart.prototype.contentHash, `sha256:${hashJson({ beats: profileComposite.chart.beats, recipeId: profileComposite.recipeId, rulesetId: profileComposite.rulesetId, sourceHash: profileComposite.chart.prototype.sourceHash, converterProfile: canonicalConverterProfile })}`);
+assert.equal(profileComposite.chart.prototype.contentHash, `sha256:${hashJson({ beats: profileComposite.chart.beats, sourceHash: profileComposite.chart.prototype.sourceHash, rulesetId: profileComposite.rulesetId, converterProfile: canonicalConverterProfile })}`, "z7nw: collider profile composite keeps the recipeId-absent content projection");
 await verifyProfileRejections(profilePackage);
 
 const runtime = createAeroContentRuntime({ onListenerError() { throw new Error("listener error callback should be isolated too"); } });
@@ -176,7 +184,7 @@ runtime.subscribe(() => { listenerCalls += 1; throw new Error("expected isolated
 await runtime.loadPackage({ package: basePackage, packageHash: `sha256:${packageHash}`, assets: [{ path: "song.ogg", bytes: audioBytes }] });
 let snapshot = runtime.getSnapshot();
 assert.equal(snapshot.state, "ready");
-assert.equal(snapshot.variants.length, 5);
+assert.equal(snapshot.variants.length, 2);
 const runtimeFlowVariants = snapshot.variants.filter((variant) => variant.mode === "flow");
 assert.deepEqual(runtimeFlowVariants.map((variant) => variant.rulesetId), ["flow_colliders_v1"], "the sole Flow runtime variant is the colliders ruleset");
 assert.equal(snapshot.selectedVariant.rulesetId, "flow_colliders_v1", "Flow (colliders) remains the exact default");
@@ -278,11 +286,12 @@ await paletteRuntime.swapFutureVariant(paletteFlowId, { modifierIds: ["no_obstac
 assert.equal(paletteRuntime[projectionSymbol]().some((event) => event.authoredBeat.type === "obstacle"), false);
 assert.equal(paletteRuntime[projectionSymbol]().find((event) => event.eventId === preservedPaletteNote?.eventId)?.appearanceColor, "#FF0000", "future swaps retain the generation-effective palette without public leakage");
 const paletteBoxingVariants = paletteRuntime.getSnapshot().variants.filter((variant) => variant.mode === "boxing");
-assert.deepEqual(paletteBoxingVariants.map((variant)=>[variant.recipeId,variant.rulesetId,variant.rulesetId==="boxing_semantic_track_v1"?"boxing_lanes":"boxing_spatial_grid"]),BOXING_VARIANT_MATRIX,"exact positive matrix covers both Boxing Lanes and Grid in both recipe families");
+// z7nw — the new-shape package exposes exactly one Boxing variant: the sole collider.
+assert.deepEqual(paletteBoxingVariants.map((variant)=>[variant.recipeId,variant.rulesetId]),[[null,BOXING_COLLIDER_RULESET_ID]],"sole collider variant replaces the legacy four-chart Lanes/Grid matrix for new imports");
 await paletteRuntime.swapFutureVariant(paletteBoxingVariants[0].variantId);
 assert.equal(paletteRuntime[projectionSymbol]().find((event) => event.eventId === preservedPaletteNote?.eventId)?.appearanceColor, "#FF0000", "cross-mode swaps retain appearance for preserved Flow notes");
 for(const variant of paletteBoxingVariants){await paletteRuntime.selectVariant(variant.variantId);const events=paletteRuntime[projectionSymbol]().filter((event)=>event.variantId===variant.variantId);assert.deepEqual(events.filter((event)=>Object.hasOwn(event,"appearanceColor")).map((event)=>[event.authoredBeat.type,event.appearanceColor]),boxingColorExpectation("#FF0000","#808080"),`all six canonical punches use deterministic custom hand colors for ${variant.variantId}`);assert.deepEqual(events.filter((event)=>BOXING_FIXED_TYPES.includes(event.authoredBeat.type)).map((event)=>[event.authoredBeat.type,Object.hasOwn(event,"appearanceColor")]),BOXING_FIXED_TYPES.map((type)=>[type,false]),`guard and three Boxing obstacle types remain fixed-color for ${variant.variantId}`);}
-const exactModeColorRows=[],exactModeFixedRows=[];for(const [mode,rulesetId] of [["boxing_lanes","boxing_semantic_track_v1"],["boxing_spatial_grid","boxing_spatial_grid_v1"]]){const variant=paletteBoxingVariants.find((entry)=>entry.rulesetId===rulesetId);assert.ok(variant,`${mode} acceptance variant exists`);await paletteRuntime.selectVariant(variant.variantId);const privateEvents=paletteRuntime[projectionSymbol](),publicSnapshot=paletteRuntime.getSnapshot();for(const {type} of BOXING_PUNCH_CASES){const event=privateEvents.find((entry)=>entry.authoredBeat.type===type);exactModeColorRows.push([mode,type,event?.appearanceColor??null]);}for(const type of ["guard","squat","weave_left","weave_right"]){const event=privateEvents.find((entry)=>entry.authoredBeat.type===type);exactModeFixedRows.push([mode,type,Object.hasOwn(event??{},"appearanceColor")]);}assert.equal(publicSnapshot.resolvedEvents.some((event)=>Object.hasOwn(event,"appearanceColor")),false,`${mode} public events omit private appearance`);assert.equal(JSON.stringify(publicSnapshot).includes(palettePackage.notePalette.paletteHash)||JSON.stringify(publicSnapshot).includes("#FF0000")||JSON.stringify(publicSnapshot).includes("#808080"),false,`${mode} public snapshot omits palette provenance and colors`);}assert.deepEqual(exactModeColorRows,BOXING_MODE_COLOR_ROWS,"explicit six punch types map exact left/right colors in Boxing Lanes and Grid");assert.deepEqual(exactModeFixedRows,BOXING_MODE_FIXED_ROWS,"explicit guard/squat/weave rows remain fixed in Boxing Lanes and Grid");
+{const variant=paletteBoxingVariants[0];await paletteRuntime.selectVariant(variant.variantId);const privateEvents=paletteRuntime[projectionSymbol](),publicSnapshot=paletteRuntime.getSnapshot();for(const {type} of BOXING_PUNCH_CASES){const event=privateEvents.find((entry)=>entry.authoredBeat.type===type);assert.equal(event?.appearanceColor??"",(type.endsWith("_left")?"#FF0000":"#808080"),`collider ${type} maps the exact custom hand color`);}for(const type of ["guard","squat","weave_left","weave_right"]){const event=privateEvents.find((entry)=>entry.authoredBeat.type===type);assert.equal(Object.hasOwn(event??{},"appearanceColor"),false,`collider ${type} remains fixed-color`);}assert.equal(publicSnapshot.resolvedEvents.some((event)=>Object.hasOwn(event,"appearanceColor")),false,"collider public events omit private appearance");assert.equal(JSON.stringify(publicSnapshot).includes(palettePackage.notePalette.paletteHash)||JSON.stringify(publicSnapshot).includes("#FF0000")||JSON.stringify(publicSnapshot).includes("#808080"),false,"collider public snapshot omits palette provenance and colors");}
 const stalePaletteEvents = paletteRuntime[projectionSymbol]();
 await paletteRuntime.loadPackage({ package: basePackage, assets: [{ path: "song.ogg", bytes: audioBytes }] });
 assert.equal(paletteRuntime[effectivePaletteSymbol](paletteGeneration), null, "a replaced generation cannot retain the prior song palette");
@@ -452,17 +461,23 @@ assert.deepEqual({ ranked: accessibilityRuntime.getSnapshot().selectedVariant.ra
 await accessibilityRuntime.selectVariant(accessibilityFlowId, { modifierIds: ["obstacle_visual_only"] });
 assert.equal(accessibilityRuntime.getSnapshot().resolvedEvents.some((event) => event.authoredBeat.type === "obstacle"), true);
 await assert.rejects(() => accessibilityRuntime.selectVariant(accessibilityFlowId, { modifierIds: ["no_obstacles", "obstacle_visual_only"] }), hasCode("modifier_conflict"));
+// z7nw — mutation-based flow tests now use the new-shape collider base package, whose sole
+// boxing chart carries no obstacle beats; hostile obstacle payloads are therefore injected into
+// the FLOW chart (validated against the Flow event schema with closed exact keys).
 const backwardsIntervalPackage = structuredClone(basePackage);
 const backwardsFlow = backwardsIntervalPackage.charts.find((chart) => chart.mode === "flow");
 assert.ok(backwardsFlow);
 backwardsFlow.beats = [{ start: 2, end: 1, type: "obstacle", sourceGeometry, gameplayGeometry, gridMask: [1,5,9] }];
+rehashFlow(backwardsIntervalPackage);
 await assert.rejects(() => validateRuntimePackage(backwardsIntervalPackage), hasCode("event_interval_invalid"));
 const maskMismatchPackage = structuredClone(basePackage);
 maskMismatchPackage.charts.find((chart) => chart.mode === "flow").beats = [{ start: 1, end: 2, type: "obstacle", sourceGeometry, gameplayGeometry, gridMask: [1] }];
+rehashFlow(maskMismatchPackage);
 await assert.rejects(() => validateRuntimePackage(maskMismatchPackage), hasCode("flow_obstacle_invalid"));
-for(const mutate of [(beat)=>{beat.sourceGeometry.x=4;},(beat)=>{beat.gridMask=[0];},(beat)=>{beat.blockedCells=[0];},(beat)=>{beat.checkpoint.noseSafeCells=[0];},(beat)=>{beat.type="weave_left";}]){const mismatch=structuredClone(basePackage),boxingChart=mismatch.charts.find((chart)=>chart.mode==="boxing"),boxingObstacle=boxingChart.beats.find((beat)=>beat.type==="squat");mutate(boxingObstacle);await assert.rejects(()=>validateRuntimePackage(mismatch),hasCode("boxing_obstacle_invalid"),"Boxing interval, geometry, action, mask, blocked cells, and checkpoint must fail atomically on disagreement");}
+// The Flow obstacle admission cap is 512 per chart (contracts `maximumObstaclesPerChart`).
 const tooManyObstacles = structuredClone(basePackage);
-tooManyObstacles.charts.find((chart) => chart.mode === "flow").beats = Array.from({ length: 129 }, (_, index) => ({ start: index, end: index + 0.5, type: "obstacle", sourceGeometry, gameplayGeometry, gridMask: [1,5,9] }));
+tooManyObstacles.charts.find((chart) => chart.mode === "flow").beats = Array.from({ length: 513 }, (_, index) => ({ start: index / 4, end: index / 4 + 0.5, type: "obstacle", sourceGeometry, gameplayGeometry, gridMask: [1,5,9] }));
+rehashFlow(tooManyObstacles);
 await assert.rejects(() => validateRuntimePackage(tooManyObstacles), hasCode("flow_obstacle_limit_exceeded"));
 const exactObstacleLimit = structuredClone(tooManyObstacles);
 exactObstacleLimit.charts.find((chart) => chart.mode === "flow").beats.pop();
@@ -521,7 +536,8 @@ assert.ok(endPastBoundaryFlow);
 endPastBoundaryFlow.beats = [{ start: 172_799, end: 172_800.000001, type: "obstacle", sourceGeometry, gameplayGeometry, gridMask: [1,5,9] }];
 await assert.rejects(() => validateRuntimePackage(endPastBoundaryPackage), hasCode("event_timeline_invalid"), "interval end immediately after 24 hours rejects");
 
-const boxing = snapshot.variants.find((variant) => variant.rulesetId === "boxing_semantic_track_v1" && variant.recipeId === "row_family_balanced_height_v1");
+// z7nw — the new-shape package's sole Boxing variant is the collider.
+const boxing = snapshot.variants.find((variant) => variant.rulesetId === BOXING_COLLIDER_RULESET_ID);
 assert.ok(boxing);
 await runtime.selectVariant(boxing.variantId, { modifierIds: ["no_squats", "crossed_guard", "cross_body"] });
 snapshot = runtime.getSnapshot();
@@ -540,33 +556,40 @@ await emittedRuntime.loadPackage({ package: emittedPackage, assets: [{ path: "so
 await emittedRuntime.selectVariant(emittedPackage.charts[0].chartId, { modifierIds: ["no_squats"] });
 assert.deepEqual(emittedRuntime.getSnapshot().selectedVariant.modifierIds, ["crossed_guard", "no_squats"]);
 
+// z7nw — with a single authored collider variant, the distinct second Boxing identity is a
+// same-base composite: the runtime composes it from the base id plus modifier selection.
 const oldEvents = snapshot.resolvedEvents;
 runtime.setPlaybackState({ state: "paused", positionMs: 1250, judgedEventIds: [oldEvents[0].eventId], activeEventIds: [oldEvents[2].eventId] });
-const cut = runtime.getSnapshot().variants.find((variant) => variant.rulesetId === "boxing_semantic_track_v1" && variant.recipeId === "cut_family_source_height_v1");
-assert.ok(cut);
-await runtime.swapFutureVariant(cut.variantId, { modifierIds: ["any_punch"] });
+await runtime.selectVariant(boxing.variantId, { modifierIds: ["any_punch"] });
 snapshot = runtime.getSnapshot();
-assert.equal(snapshot.selectedVariant.recipeId, "cut_family_source_height_v1");
+assert.equal(snapshot.selectedVariant.recipeId, null);
 assert.equal(snapshot.selectedVariant.ranked, false);
-assert.equal(snapshot.resolvedEvents.includes(oldEvents[0]), true);
-assert.equal(snapshot.resolvedEvents.includes(oldEvents[1]), false);
-assert.equal(snapshot.resolvedEvents.includes(oldEvents[2]), true);
-assert.equal(snapshot.resolvedEvents.some((event) => event.variantId === snapshot.selectedVariant.variantId), true);
+assert.deepEqual(snapshot.selectedVariant.modifierIds, ["any_punch"]);
+assert.notEqual(snapshot.selectedVariant.variantId, boxing.variantId, "the any_punch composition derives a distinct variant identity");
+// z7nw — the any_punch composite adds no beats and removes none: its timeline covers the
+// same authored IDs plus whatever the prior no_squats composition had dropped from view.
+const oldEventIds = new Set(oldEvents.map((event) => String(event.eventId)));
+assert.equal(snapshot.resolvedEvents.every((event) => oldEventIds.has(String(event.eventId)) || String(event.authoredBeat.type) === "squat"), true, "any_punch composite re-exposes the squats the no_squats composition dropped, and adds nothing else");
+assert.equal(snapshot.resolvedEvents.some((event) => String(event.authoredBeat.type) === "squat"), true, "no_squats was scoped to its own composition, so the plain any_punch selection re-includes squat obstacles");
 runtime.setPlaybackState({ state: "running", positionMs: 1250 });
 await assert.rejects(() => runtime.swapFutureVariant(boxing.variantId), hasCode("variant_swap_not_paused"));
 await assert.rejects(() => runtime.selectVariant(boxing.variantId), hasCode("variant_swap_running"));
 
+// z7nw — with the single collider variant there is no second authored Boxing identity;
+// the swap evidence now distinguishes the composite (same base rule set, different modifiers).
 const boundaryRuntime = createAeroContentRuntime();
 await boundaryRuntime.loadPackage({ package: basePackage, assets: [{ path: "song.ogg", bytes: audioBytes }] });
-await boundaryRuntime.selectVariant(boxing.variantId);
+await boundaryRuntime.selectVariant(boxing.variantId, { modifierIds: ["any_punch"] });
 const boundaryOld = boundaryRuntime.getSnapshot().resolvedEvents;
+const boundarySelectedCompositeId = boundaryRuntime.getSnapshot().selectedVariant.variantId;
 boundaryRuntime.setPlaybackState({ state: "paused", positionMs: 1000 });
-await boundaryRuntime.swapFutureVariant(cut.variantId);
+await boundaryRuntime.selectVariant(boxing.variantId);
 const boundaryNew = boundaryRuntime.getSnapshot().resolvedEvents;
-assert.equal(boundaryNew.includes(boundaryOld.find((event) => event.centerTimestampMs === 500)), true);
-assert.equal(boundaryNew.includes(boundaryOld.find((event) => event.centerTimestampMs === 1000)), false);
-await boundaryRuntime.swapFutureVariant(boxing.variantId);
-assert.equal(boundaryRuntime.getSnapshot().resolvedEvents.includes(boundaryOld.find((event) => event.centerTimestampMs === 500)), true);
+assert.equal(boundaryNew.length, boundaryOld.length, "collider base and its any_punch composite resolve the same authored event set");
+assert.equal(boundaryNew[0].eventId, boundaryOld[0].eventId, "collider composite shares authored event IDs with its base");
+assert.notEqual(boundarySelectedCompositeId, boxing.variantId, "the composite carries a distinct derived identity");
+await boundaryRuntime.swapFutureVariant(boxing.variantId, { modifierIds: ["no_weaves"] });
+assert.equal(boundaryRuntime.getSnapshot().resolvedEvents.some((event) => String(event.authoredBeat.type).startsWith("weave_")), false, "future-only swaps retain past identity and apply new modifiers to future targets only");
 
 const cosmeticPackage = structuredClone(basePackage);
 cosmeticPackage.presentationSuggestion = { background: { schema: "aerobeat/background_suggestion", version: 1, source: "song", kind: "image", url: "https://assets.example.invalid/background.webp", hash: null, themeId: null } };
@@ -775,7 +798,8 @@ await assert.rejects(() => noncanonicalRuntime.loadPersistenceHandle(handle), ha
 // Emitted modifiers are part of chart identity, not hidden per-event state.
 const hiddenModifier = structuredClone(basePackage);
 hiddenModifier.charts[0].beats[0].modifier = "crossed_guard";
-hiddenModifier.charts[0].prototype.contentHash = `sha256:${hashJson({ beats: hiddenModifier.charts[0].beats, recipeId: hiddenModifier.charts[0].prototype.recipeId, rulesetId: hiddenModifier.charts[0].prototype.rulesetId, sourceHash: hiddenModifier.charts[0].prototype.sourceHash })}`;
+// z7nw — collider content projection omits the recipe identity.
+hiddenModifier.charts[0].prototype.contentHash = `sha256:${hashJson({ beats: hiddenModifier.charts[0].beats, sourceHash: hiddenModifier.charts[0].prototype.sourceHash, rulesetId: hiddenModifier.charts[0].prototype.rulesetId })}`;
 await assert.rejects(() => createAeroContentRuntime().loadPackage({ package: hiddenModifier, assets: [{ path: "song.ogg", bytes: audioBytes }] }), hasCode("event_modifier_not_in_identity"));
 
 console.log("Content runtime unit checks passed.");
@@ -822,24 +846,26 @@ function packageWithFlowEvents(packageRecord, eventCount) {
   rehashFlow(result);
   return result;
 }
+/** @param {string} token @returns {Record<string, unknown>[]} */
+function boxingFixtureBeats(token) {
+  return [
+    { start: 1, end: 2, type: "squat", eventId: `${token}-squat`, sourceEventIds: ["source-squat"], sourceGeometry: { schema:"aerobeat/obstacle_source_geometry",version:1,coordinateSpace:"beatsaber_v3_obstacle_rect",kind:"v3_rect",x:0,y:2,width:4,height:1 }, gameplayGeometry: { schema:"aerobeat/obstacle_gameplay_geometry",version:1,coordinateSpace:"aerobeat_top_left_grid",x:0,y:0,width:4,height:1 }, gridMask: [0, 1, 2, 3], blockedCells: [0, 1, 2, 3], checkpoint: { kind: "instantaneous", freshnessMs: 150, timingWindowMs: 180, noseSafeCells: [4, 5, 6, 7, 8, 9, 10, 11] } },
+    { start: 2, type: "guard", eventId: `${token}-guard`, sourceEventIds: ["source-guard"], guardTarget: { leftCell: 4, rightCell: 7 }, checkpoint: { kind: "instantaneous" } },
+    ...BOXING_PUNCH_CASES.map(({type,hand},index)=>({ start:3+index,type,eventId:`${token}-${type}`,sourceEventIds:[`source-${type}`],spatialTarget:{targetCell:hand==="left"?5:6,acceptedSubcells:hand==="left"?[20,21]:[26,27],sourceCell:hand==="left"?9:5,...(hand==="left"?{qualificationMs:100}:{entryDirection:"left"})} })),
+    { start: 9, end: 10, type: "weave_left", eventId: `${token}-weave-left`, sourceEventIds: ["source-weave-left"], sourceGeometry: { schema:"aerobeat/obstacle_source_geometry",version:1,coordinateSpace:"beatsaber_v3_obstacle_rect",kind:"v3_rect",x:3,y:0,width:1,height:3 }, gameplayGeometry: { schema:"aerobeat/obstacle_gameplay_geometry",version:1,coordinateSpace:"aerobeat_top_left_grid",x:3,y:0,width:1,height:3 }, gridMask: [3,7,11], blockedCells: [3,7,11], checkpoint: { kind: "instantaneous", freshnessMs: 150, timingWindowMs: 180, noseSafeCells: [0,1,2,4,5,6,8,9,10] } },
+    { start: 10, end: 11, type: "weave_right", eventId: `${token}-weave-right`, sourceEventIds: ["source-weave-right"], sourceGeometry: { schema:"aerobeat/obstacle_source_geometry",version:1,coordinateSpace:"beatsaber_v3_obstacle_rect",kind:"v3_rect",x:0,y:0,width:1,height:3 }, gameplayGeometry: { schema:"aerobeat/obstacle_gameplay_geometry",version:1,coordinateSpace:"aerobeat_top_left_grid",x:0,y:0,width:1,height:3 }, gridMask: [0,4,8], blockedCells: [0,4,8], checkpoint: { kind: "instantaneous", freshnessMs: 150, timingWindowMs: 180, noseSafeCells: [1,2,3,5,6,7,9,10,11] } }
+  ];
+}
 /** @param {string} declaredAudioHash @param {Readonly<Record<string, unknown>> | null} [converterProfile] */
 async function makePackage(declaredAudioHash, converterProfile = null) {
   const sourceHash = `sha256:${hashBytes(new TextEncoder().encode("arbitrary-source"))}`;
-  const recipes = ["row_family_balanced_height_v1", "cut_family_source_height_v1"];
-  const rulesets = ["boxing_semantic_track_v1", "boxing_spatial_grid_v1"];
-  const charts = [];
-  for (const recipeId of recipes) for (const rulesetId of rulesets) {
-    const token = `${recipeId.startsWith("row") ? "row" : "cut"}-${rulesetId.includes("semantic") ? "semantic" : "spatial"}`;
-    const beats = [
-      { start: 1, end: 2, type: "squat", eventId: `${token}-squat`, sourceEventIds: ["source-squat"], sourceGeometry: { schema:"aerobeat/obstacle_source_geometry",version:1,coordinateSpace:"beatsaber_v3_obstacle_rect",kind:"v3_rect",x:0,y:2,width:4,height:1 }, gameplayGeometry: { schema:"aerobeat/obstacle_gameplay_geometry",version:1,coordinateSpace:"aerobeat_top_left_grid",x:0,y:0,width:4,height:1 }, gridMask: [0, 1, 2, 3], blockedCells: [0, 1, 2, 3], checkpoint: { kind: "instantaneous", freshnessMs: 150, timingWindowMs: 180, noseSafeCells: [4, 5, 6, 7, 8, 9, 10, 11] } },
-      { start: 2, type: "guard", eventId: `${token}-guard`, sourceEventIds: ["source-guard"], guardTarget: { leftCell: 4, rightCell: 7 }, checkpoint: { kind: "instantaneous" } },
-      ...BOXING_PUNCH_CASES.map(({type,hand},index)=>({ start:3+index,type,eventId:`${token}-${type}`,sourceEventIds:[`source-${type}`],spatialTarget:{targetCell:hand==="left"?5:6,acceptedSubcells:hand==="left"?[20,21]:[26,27],sourceCell:hand==="left"?9:5,...(hand==="left"?{qualificationMs:100}:{entryDirection:"left"})} })),
-      { start: 9, end: 10, type: "weave_left", eventId: `${token}-weave-left`, sourceEventIds: ["source-weave-left"], sourceGeometry: { schema:"aerobeat/obstacle_source_geometry",version:1,coordinateSpace:"beatsaber_v3_obstacle_rect",kind:"v3_rect",x:3,y:0,width:1,height:3 }, gameplayGeometry: { schema:"aerobeat/obstacle_gameplay_geometry",version:1,coordinateSpace:"aerobeat_top_left_grid",x:3,y:0,width:1,height:3 }, gridMask: [3,7,11], blockedCells: [3,7,11], checkpoint: { kind: "instantaneous", freshnessMs: 150, timingWindowMs: 180, noseSafeCells: [0,1,2,4,5,6,8,9,10] } },
-      { start: 10, end: 11, type: "weave_right", eventId: `${token}-weave-right`, sourceEventIds: ["source-weave-right"], sourceGeometry: { schema:"aerobeat/obstacle_source_geometry",version:1,coordinateSpace:"beatsaber_v3_obstacle_rect",kind:"v3_rect",x:0,y:0,width:1,height:3 }, gameplayGeometry: { schema:"aerobeat/obstacle_gameplay_geometry",version:1,coordinateSpace:"aerobeat_top_left_grid",x:0,y:0,width:1,height:3 }, gridMask: [0,4,8], blockedCells: [0,4,8], checkpoint: { kind: "instantaneous", freshnessMs: 150, timingWindowMs: 180, noseSafeCells: [1,2,3,5,6,7,9,10,11] } }
-    ];
-    const contentHash = hashJson({ beats, recipeId, rulesetId, sourceHash, ...(converterProfile ? { converterProfile } : {}) });
-    charts.push({ schemaId: "aerobeat.chart.boxing.v1", schemaVersion: 1, recordVersion: 1, chartId: `chart-${token}`, chartName: token, mode: "boxing", difficulty: "Expert", prototype: { contractId: "aerobeat.boxing.prototype.v1", recipeId, recipeVersion: "1.0.0", rulesetId, rulesetVersion: "1.0.0", sourceHash, recipeHash: `sha256:${"1".repeat(64)}`, rulesetHash: `sha256:${"2".repeat(64)}`, contentHash: `sha256:${contentHash}`, modifiers: [], ...(converterProfile ? { converterProfile: structuredClone(converterProfile) } : {}), regenerationRequiredFor: [] }, beats });
-  }
+  // z7nw — new-import shape: exactly one Boxing collider chart (no recipe identity).
+  const colliderToken = "collider";
+  const colliderBeats = boxingFixtureBeats(colliderToken);
+  const colliderContentHash = hashJson({ beats: colliderBeats, sourceHash, rulesetId: BOXING_COLLIDER_RULESET_ID, ...(converterProfile ? { converterProfile } : {}) });
+  const charts = [
+    { schemaId: "aerobeat.chart.boxing.v1", schemaVersion: 1, recordVersion: 1, chartId: `chart-row-collider`, chartName: "Collider", mode: "boxing", difficulty: "Expert", prototype: { contractId: "aerobeat.boxing.prototype.v1", recipeVersion: "1.0.0", rulesetId: BOXING_COLLIDER_RULESET_ID, rulesetVersion: "1.0.0", sourceHash, recipeHash: `sha256:${"1".repeat(64)}`, rulesetHash: `sha256:${"2".repeat(64)}`, contentHash: `sha256:${colliderContentHash}`, modifiers: [], ...(converterProfile ? { converterProfile: structuredClone(converterProfile) } : {}), regenerationRequiredFor: [] }, beats: colliderBeats }
+  ];
   const flowBeats = [{ start: 1, type: "note", hand: "left", placement: 4, requiresDirection: true, angleOffset: 0, direction: 1 }];
   const flowChart = { schemaId: "aerobeat.chart.flow.v5", schemaVersion: 5, recordVersion: 2, rulesetId: "flow_colliders_v1", rulesetVariants: ["flow_colliders_v1"], chartId: "chart-flow", chartName: "Flow", mode: "flow", difficulty: "Expert", notePalette: null, contentHash: `sha256:${hashJson({ beats: flowBeats, rulesetId: "flow_colliders_v1", rulesetVariants: ["flow_colliders_v1"], notePalette: null })}`, beats: flowBeats };
   charts.push(flowChart);
@@ -870,7 +896,7 @@ async function verifyFlowAdmissionSecurity(packageRecord, audio, declaredAudioHa
   rehashFlow(eventPackage);
   const validRuntime = createAeroContentRuntime();
   await validRuntime.loadPackage({ package: eventPackage, packageHash: `sha256:${hashJson(eventPackage)}`, assets: [{ path: "song.ogg", bytes: audio }] });
-  assert.equal(validRuntime.getSnapshot().variants.length, 5);
+  assert.equal(validRuntime.getSnapshot().variants.length, 2);
   const validFlowVariants = validRuntime.getSnapshot().variants.filter((variant) => variant.mode === "flow");
   assert.equal(validFlowVariants.length, 1);
   assert.equal(validFlowVariants[0].rulesetId, "flow_colliders_v1");
@@ -946,6 +972,53 @@ async function verifyFlowAdmissionSecurity(packageRecord, audio, declaredAudioHa
     await assert.rejects(() => validateRuntimePackage(attack, { declaredPackageHash: `sha256:${hashJson(attack)}` }), (error) => Boolean(error && typeof error === "object" && "code" in error && ["data_array_invalid", "flow_obstacle_invalid"].includes(String(error.code))), "nested obstacle evidence smuggling must fail admission");
   }
 }
+
+/** @param {Record<string, unknown>} base */
+async function verifyBoxingShapeSeparation(base) {
+  // z7nw positive coverage (a): a new-shape package validates and exposes exactly two
+  // variants; the collider variant is ranked, non-local-only, recipeless.
+  const baseValue = structuredClone(base);
+  const fresh = await validateRuntimePackage(baseValue);
+  assert.equal(fresh.variants.length, 2, "new-shape package exposes exactly Flow + collider");
+  const colliderVariant = fresh.variants.find((variant) => variant.mode === "boxing");
+  assert.ok(colliderVariant, "collider variant exists");
+  assert.deepEqual([colliderVariant.rulesetId, colliderVariant.recipeId, colliderVariant.ranked, colliderVariant.localOnly], [BOXING_COLLIDER_RULESET_ID, null, true, false]);
+  assert.equal(Object.hasOwn(colliderVariant.chart.prototype, "recipeId"), false, "collider prototype carries no recipe identity");
+
+  // z7nw positive coverage (b): a legacy four-chart stored package still validates (5 variants).
+  const legacyBase = structuredClone(baseValue);
+  // Drop the new-shape collider chart; the stored bytes instead carry the four-chart matrix.
+  legacyBase.charts = /** @type {Record<string, unknown>[]} */ (legacyBase.charts.filter((chart) => chart.mode === "flow"));
+  legacyBase.sets = /** @type {Record<string, unknown>[]} */ (legacyBase.sets.filter((set) => String(set.chartId) !== "chart-row-collider"));
+  const legacySourceHash = String(legacyBase.source.sourceHash);
+  const recipes = ["row_family_balanced_height_v1", "cut_family_source_height_v1"];
+  const rulesets = ["boxing_semantic_track_v1", "boxing_spatial_grid_v1"];
+  for (let index = 0; index < recipes.length * rulesets.length; index += 1) {
+    const recipeId = recipes[Math.floor(index / rulesets.length)];
+    const rulesetId = rulesets[index % rulesets.length];
+    const token = `legacy-${index + 1}`;
+    const beats = boxingFixtureBeats(token);
+    const contentHash = hashJson({ beats, recipeId, rulesetId, sourceHash: legacySourceHash });
+    legacyBase.charts.push({ schemaId: "aerobeat.chart.boxing.v1", schemaVersion: 1, recordVersion: 1, chartId: `chart-${token}`, chartName: token, mode: "boxing", difficulty: "Expert", prototype: { contractId: "aerobeat.boxing.prototype.v1", recipeId, recipeVersion: "1.0.0", rulesetId, rulesetVersion: "1.0.0", sourceHash: legacySourceHash, recipeHash: `sha256:${"1".repeat(64)}`, rulesetHash: `sha256:${"2".repeat(64)}`, contentHash: `sha256:${contentHash}`, modifiers: [], regenerationRequiredFor: [] }, beats });
+    legacyBase.sets.push({ schemaId: "aerobeat.set.v1", schemaVersion: 1, recordVersion: 1, setId: `set-legacy-${index + 1}`, setName: token, songId: legacyBase.songId, chartId: `chart-${token}` });
+  }
+  // Keep the trace/chart counts consistent (four legacy boxing traces for the stored matrix shape).
+  legacyBase.conversionTrace.boxing.push(.../** @type {Record<string, unknown>[]} */ (legacyBase.charts).filter((chart) => chart.mode === "boxing").slice(1).map((chart) => ({ chartId: chart.chartId, spawnTiming: structuredClone(spawnTiming) })));
+  const legacyValidation = await validateRuntimePackage(legacyBase);
+  assert.equal(legacyValidation.variants.length, 5, "legacy four-chart matrix remains fully readable");
+  const legacyIdentitySet = new Set(legacyValidation.variants.filter((variant) => variant.mode === "boxing").map((variant) => `${String(variant.recipeId)}|${variant.rulesetId}`));
+  for (const identity of LEGACY_BOXING_VARIANTS) assert.ok(legacyIdentitySet.has(`${identity[0]}|${identity[1]}`), `legacy matrix retains ${identity[0]} / ${identity[1]}`);
+
+  // z7nw positive coverage (c): collider charts with a wrong content-hash projection are rejected.
+  const badColliderRecipe = structuredClone(baseValue);
+  const badColliderChart = /** @type {Record<string, unknown>} */ (badColliderRecipe.charts.find((chart) => chart.mode === "boxing"));
+  badColliderChart.prototype.contentHash = `sha256:${hashJson({ beats: badColliderChart.beats, recipeId: "row_family_balanced_height_v1", sourceHash: badColliderChart.prototype.sourceHash, rulesetId: BOXING_COLLIDER_RULESET_ID })}`;
+  await assert.rejects(() => validateRuntimePackage(badColliderRecipe), hasCode("chart_hash_mismatch"), "collider content hash including a recipe identity fails closed");
+  const badColliderSource = structuredClone(baseValue);
+  const badColliderSourceChart = /** @type {Record<string, unknown>} */ (badColliderSource.charts.find((chart) => chart.mode === "boxing"));
+  badColliderSourceChart.prototype.contentHash = `sha256:${hashJson({ beats: badColliderSourceChart.beats, sourceHash: `sha256:${"9".repeat(64)}`, rulesetId: BOXING_COLLIDER_RULESET_ID })}`;
+  await assert.rejects(() => validateRuntimePackage(badColliderSource), hasCode("chart_hash_mismatch"), "collider content hash over a wrong source hash fails closed");
+}
 /** @param {Record<string, unknown>} packageRecord @param {(beats:Record<string,unknown>[])=>void} mutate */
 function rehashedFlowAttack(packageRecord, mutate) { const packageValue = structuredClone(packageRecord); const flow = packageValue.charts.find((chart) => chart.mode === "flow"); mutate(flow.beats); rehashFlow(packageValue); return { package: packageValue, packageHash: hashJson(packageValue) }; }
 /** @param {unknown} value @param {(key:string)=>void} visit */
@@ -959,7 +1032,8 @@ async function verifyProfileRejections(profilePackage) {
   mutations.push((value) => { value.charts[0].prototype.converterProfile.extra = true; });
   mutations.push((value) => { value.charts[0].prototype.converterProfile = structuredClone(reachConverterProfile); });
   mutations.push((value) => { value.source.converterProfile.settings.guardRelocationRadius = 3; });
-  mutations.push((value) => { value.conversionTrace.boxing[2].converterProfile = structuredClone(reachConverterProfile); });
+  // z7nw — the new-shape package carries a single collider boxing trace at index 0.
+  mutations.push((value) => { value.conversionTrace.boxing[0].converterProfile = structuredClone(reachConverterProfile); });
   mutations.push((value) => { value.conversionTrace.flow[0].converterProfile = structuredClone(canonicalConverterProfile); });
   for (const mutate of mutations) {
     const candidate = structuredClone(profilePackage);
