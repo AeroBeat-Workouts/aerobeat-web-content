@@ -333,9 +333,15 @@ async function normalizeConverterProfile(value) {
   const profileId = boundedProfileString(record.profileId, 128);
   const profileVersion = boundedProfileString(record.profileVersion, 64);
   const label = boundedProfileString(record.label, 256);
-  if (!hasExactDataKeys(record.settings, ["guardRelocationRadius", "reachAllowanceSubcells"])) throw dataError("converter_profile_settings_invalid", "Converter profile settings must contain the exact supported fields");
+  if (!hasExactOptionalDataKeys(record.settings, ["guardRelocationRadius", "reachAllowanceSubcells"], ["guardSpacing", "uppercutOppositeLane", "anyOppositeLane"])) throw dataError("converter_profile_settings_invalid", "Converter profile settings must contain only supported fields");
   const settingsValue = /** @type {DataRecord} */ (record.settings);
-  const settings = Object.freeze({ guardRelocationRadius: boundedProfileInteger(settingsValue.guardRelocationRadius), reachAllowanceSubcells: boundedProfileInteger(settingsValue.reachAllowanceSubcells) });
+  const settings = Object.freeze({
+    guardRelocationRadius: boundedProfileInteger(settingsValue.guardRelocationRadius),
+    reachAllowanceSubcells: boundedProfileInteger(settingsValue.reachAllowanceSubcells),
+    ...(Object.hasOwn(settingsValue, "guardSpacing") ? { guardSpacing: boundedProfileGuardSpacing(settingsValue.guardSpacing) } : {}),
+    ...(Object.hasOwn(settingsValue, "uppercutOppositeLane") ? { uppercutOppositeLane: boundedProfileBoolean(settingsValue.uppercutOppositeLane) } : {}),
+    ...(Object.hasOwn(settingsValue, "anyOppositeLane") ? { anyOppositeLane: boundedProfileBoolean(settingsValue.anyOppositeLane) } : {})
+  });
   const hashBody = Object.freeze({ schema: "aerobeat/prototype_profile", version: 1, profileId, profileVersion, class: "converter_regeneration", settings });
   const contentHash = await sha256Hex(canonicalJson(hashBody));
   if (record.contentHash !== contentHash) throw dataError("converter_profile_hash_mismatch", "Converter profile content hash does not match its canonical identity and settings");
@@ -346,6 +352,10 @@ async function normalizeConverterProfile(value) {
 function boundedProfileString(value, maximum) { if (typeof value !== "string" || !value || value.length > maximum) throw dataError("converter_profile_invalid", "Converter profile strings must be bounded and non-empty"); return value; }
 /** @param {unknown} value */
 function boundedProfileInteger(value) { if (!Number.isInteger(value) || Number(value) < 0 || Number(value) > 8) throw dataError("converter_profile_settings_invalid", "Converter profile settings must be integers from 0 through 8"); return Number(value); }
+/** @param {unknown} value */
+function boundedProfileGuardSpacing(value) { if (!Number.isInteger(value) || Number(value) < 0 || Number(value) > 2) throw dataError("converter_profile_settings_invalid", "guardSpacing must be an integer from 0 through 2"); return Number(value); }
+/** @param {unknown} value */
+function boundedProfileBoolean(value) { if (typeof value !== "boolean") throw dataError("converter_profile_settings_invalid", "Converter profile lane settings must be booleans"); return value; }
 /** @param {Readonly<Record<string, unknown>>} left @param {Readonly<Record<string, unknown>>} right */
 function sameProfile(left, right) { return canonicalJson(left) === canonicalJson(right); }
 /** @param {readonly unknown[]} beats @param {string | null} recipeId @param {string} rulesetId @param {string} sourceHash @param {Readonly<Record<string, unknown>> | null} converterProfile */

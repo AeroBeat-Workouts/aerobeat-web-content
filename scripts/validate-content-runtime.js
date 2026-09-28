@@ -28,10 +28,10 @@ const audioBytes = new TextEncoder().encode("deterministic-audio-fixture");
 const audioHash = hashBytes(audioBytes);
 const basePackage = await makePackage(audioHash);
 const packageHash = hashJson(basePackage);
-const canonicalConverterProfile = Object.freeze({ schema: "aerobeat/prototype_profile", version: 1, profileId: "aero.converter.canonical", profileVersion: "1.0.0", class: "converter_regeneration", label: "Canonical Converter (Experimental)", experimental: true, settings: Object.freeze({ guardRelocationRadius: 1, reachAllowanceSubcells: 0 }), contentHash: "a43b53a39c13c9e9efe59854aee0fa16efdcd3c6a29bc09f678d94b3fd8f0202" });
+const canonicalConverterProfile = Object.freeze({ schema: "aerobeat/prototype_profile", version: 1, profileId: "aero.converter.canonical", profileVersion: "1.0.0", class: "converter_regeneration", label: "Canonical Converter (Experimental)", experimental: true, settings: Object.freeze({ guardRelocationRadius: 1, reachAllowanceSubcells: 0, guardSpacing: 1, uppercutOppositeLane: false, anyOppositeLane: true }), contentHash: "30428615e19b695e31b2b7ce931f692d541bfb5daf73c46c5db77ee9c76b4895" });
 const sourceGeometry = Object.freeze({ schema:"aerobeat/obstacle_source_geometry",version:1,coordinateSpace:"beatsaber_v2_legacy_obstacle",kind:"v2_type_1",x:1,y:2,width:1,height:3 });
 const gameplayGeometry = Object.freeze({ schema:"aerobeat/obstacle_gameplay_geometry",version:1,coordinateSpace:"aerobeat_top_left_grid",x:1,y:0,width:1,height:3 });
-const reachConverterProfile = Object.freeze({ schema: "aerobeat/prototype_profile", version: 1, profileId: "aero.converter.prototype-reach", profileVersion: "1.0.0", class: "converter_regeneration", label: "Prototype Reach Converter (Experimental)", experimental: true, settings: Object.freeze({ guardRelocationRadius: 2, reachAllowanceSubcells: 1 }), contentHash: "e37f8b527ed5ce86738ce22007fc963f83bccd737893fb4728d3b83eaa044eea" });
+const reachConverterProfile = Object.freeze({ schema: "aerobeat/prototype_profile", version: 1, profileId: "aero.converter.prototype-reach", profileVersion: "1.0.0", class: "converter_regeneration", label: "Prototype Reach Converter (Experimental)", experimental: true, settings: Object.freeze({ guardRelocationRadius: 2, reachAllowanceSubcells: 1, guardSpacing: 1, uppercutOppositeLane: false, anyOppositeLane: true }), contentHash: "152e8d9a5c208605dcd36521d4befbc8c7868cdaac66ed4d552025feb560c56c" });
 
 await verifyFlowAdmissionSecurity(basePackage, audioBytes, audioHash);
 await verifyBoxingShapeSeparation(basePackage);
@@ -1032,6 +1032,11 @@ async function verifyProfileRejections(profilePackage) {
   mutations.push((value) => { value.charts[0].prototype.converterProfile.extra = true; });
   mutations.push((value) => { value.charts[0].prototype.converterProfile = structuredClone(reachConverterProfile); });
   mutations.push((value) => { value.source.converterProfile.settings.guardRelocationRadius = 3; });
+  mutations.push((value) => { value.source.converterProfile.settings.guardSpacing = 3; });
+  mutations.push((value) => { value.source.converterProfile.settings.uppercutOppositeLane = 0; });
+  mutations.push((value) => { value.source.converterProfile.settings.anyOppositeLane = "true"; });
+  mutations.push((value) => { value.source.converterProfile.settings.unknown = true; });
+  mutations.push((value) => { delete value.source.converterProfile.settings.reachAllowanceSubcells; });
   // z7nw — the new-shape package carries a single collider boxing trace at index 0.
   mutations.push((value) => { value.conversionTrace.boxing[0].converterProfile = structuredClone(reachConverterProfile); });
   mutations.push((value) => { value.conversionTrace.flow[0].converterProfile = structuredClone(canonicalConverterProfile); });
