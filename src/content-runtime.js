@@ -150,6 +150,32 @@ export function createAeroContentRuntime(options = {}) {
       };
       return startLoad(loader, Object.freeze({ kind: "persistence_handle", id: `${handle.namespace}:${handle.key}`, handle }), normalizedOptions);
     },
+    /** Revalidate a locally regenerated package against the existing verified audio without reload/fetch. */
+    async replaceBoxingPackage(input) {
+      assertReady();
+      if (playbackState === "running") throw dataError("boxing_reprocess_running", "Pause gameplay before replacing authored Boxing targets");
+      if (!isPlainDataRecord(input)) throw dataError("content_source_invalid", "Replacement package wrapper is invalid");
+      const localGeneration = generation;
+      const previousVariant = selectedVariant;
+      const previousModifiers = Array.isArray(previousVariant?.modifierIds) ? previousVariant.modifierIds : [];
+      const validated = await validateRuntimePackage(dataProperty(input, "package"), { declaredPackageHash: dataProperty(input, "packageHash") ?? null, supportedRulesetIds: runtimeOptions.supportedRulesetIds, supportedRecipeIds: runtimeOptions.supportedRecipeIds });
+      checkGeneration(localGeneration);
+      if (validated.packageId !== packageId || validated.package.source.sourceHash !== loadedPackage.source.sourceHash || validated.song.audio?.contentHash !== loadedPackage.song.audio?.contentHash) throw dataError("boxing_reprocess_source_mismatch", "Replacement package does not match the loaded song and verified audio");
+      const oldFlow = loadedPackage.charts.find((chart) => chart.mode === "flow");
+      const newFlow = validated.package.charts.find((chart) => chart.mode === "flow");
+      if (oldFlow.contentHash !== newFlow.contentHash || oldFlow.chartId !== newFlow.chartId || oldFlow.beats.length !== newFlow.beats.length) throw dataError("boxing_reprocess_flow_changed", "Replacement must preserve the loaded Flow chart");
+      const target = validated.variants.find((variant) => variant.variantId === previousVariant?.variantId) ?? validated.variants.find((variant) => variant.rulesetId === previousVariant?.rulesetId) ?? validated.variants[0] ?? null;
+      const resolved = target && previousModifiers.length ? await composeRuntimeVariant(target, previousModifiers, String(packageId)) : target;
+      checkGeneration(localGeneration);
+      const nextEvents = resolved ? timelineFor(resolved, validated.beatToTimelineMs) : Object.freeze([]);
+      loadedPackage = validated.package; loadedBeatToTimelineMs = validated.beatToTimelineMs; effectiveNotePalette = validated.effectiveNotePalette; spawnTiming = validated.spawnTiming; packageHash = validated.packageHash;
+      variantById = new Map(validated.variants.map((variant) => [variant.variantId, variant])); composedVariants.clear();
+      if (resolved && resolved !== target) composedVariants.set(`${target.variantId}|${[...previousModifiers].sort().join(",")}`, resolved);
+      selectedVariant = resolved;
+      setResolvedEvents(nextEvents, selectedVariant);
+      publish();
+      return selectedVariant;
+    },
     async reload() {
       assertOpen();
       if (!reloadLoader || !sourceSnapshot) throw dataError("reload_unavailable", "No content source is available to reload");
