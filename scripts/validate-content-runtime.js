@@ -470,6 +470,30 @@ assert.ok(backwardsFlow);
 backwardsFlow.beats = [{ start: 2, end: 1, type: "obstacle", sourceGeometry, gameplayGeometry, gridMask: [1,5,9] }];
 rehashFlow(backwardsIntervalPackage);
 await assert.rejects(() => validateRuntimePackage(backwardsIntervalPackage), hasCode("event_interval_invalid"));
+// Map 54510 source obstacle 437 extends left of the grid; the authored clip is one cell.
+// Keep source evidence intact while independently checking the playable geometry and mask.
+const clippedSourceGeometry = { schema: "aerobeat/obstacle_source_geometry", version: 1, coordinateSpace: "beatsaber_v2_legacy_obstacle", kind: "v2_type_1", x: -2, y: 2, width: 3, height: 1 };
+const clippedGameplayGeometry = { schema: "aerobeat/obstacle_gameplay_geometry", version: 1, coordinateSpace: "aerobeat_top_left_grid", x: 0, y: 0, width: 1, height: 1 };
+const clippedObstaclePackage = structuredClone(basePackage);
+clippedObstaclePackage.charts.find((chart) => chart.mode === "flow").beats = [{ start: 1, end: 2, type: "obstacle", sourceGeometry: clippedSourceGeometry, gameplayGeometry: clippedGameplayGeometry, gridMask: [0] }];
+rehashFlow(clippedObstaclePackage);
+const clippedPackageHash = `sha256:${hashJson(clippedObstaclePackage)}`;
+const clippedRuntime = createAeroContentRuntime();
+await clippedRuntime.loadPackage({ package: clippedObstaclePackage, packageHash: clippedPackageHash, assets: [{ path: "song.ogg", bytes: audioBytes }] });
+assert.equal(clippedRuntime.getSnapshot().state, "ready", "hash-bound off-grid source evidence must not reject a valid gameplay clip");
+const clippedEvent = clippedRuntime.getSnapshot().resolvedEvents.find((event) => event.authoredBeat.type === "obstacle");
+assert.deepEqual(JSON.parse(JSON.stringify(clippedEvent.authoredBeat.sourceGeometry)), clippedSourceGeometry);
+assert.deepEqual(JSON.parse(JSON.stringify(clippedEvent.authoredBeat.gameplayGeometry)), clippedGameplayGeometry);
+assert.deepEqual(clippedEvent.authoredBeat.gridMask, [0]);
+for (const [label, mutate] of [
+  ["malformed source", (beat) => { beat.sourceGeometry.width = 0; }],
+  ["mismatched clip mask", (beat) => { beat.gridMask = [1]; }]
+]) {
+  const invalid = structuredClone(clippedObstaclePackage);
+  mutate(invalid.charts.find((chart) => chart.mode === "flow").beats[0]);
+  rehashFlow(invalid);
+  await assert.rejects(() => validateRuntimePackage(invalid, { declaredPackageHash: `sha256:${hashJson(invalid)}` }), hasCode("flow_obstacle_invalid"), `${label} must fail even after package and chart rehash`);
+}
 const maskMismatchPackage = structuredClone(basePackage);
 maskMismatchPackage.charts.find((chart) => chart.mode === "flow").beats = [{ start: 1, end: 2, type: "obstacle", sourceGeometry, gameplayGeometry, gridMask: [1] }];
 rehashFlow(maskMismatchPackage);
