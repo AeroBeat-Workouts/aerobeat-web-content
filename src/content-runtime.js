@@ -184,10 +184,29 @@ export function createAeroContentRuntime(options = {}) {
     /** @param {string} variantId @param {{modifierIds?: readonly string[]}} [selection] */
     async selectVariant(variantId, selection = {}) {
       assertReady();
-      if (playbackState === "running") throw dataError("variant_swap_running", "Variants may not change while gameplay is running");
       const localGeneration = generation;
       const target = await resolveVariant(requireBoundedString(variantId, "variant_identity_invalid", 256), normalizeModifierSelection(selection), localGeneration);
       checkGeneration(localGeneration);
+      if (playbackState === "running") {
+        // A same-ruleset variant swap (difficulty/modifier change) is blocked
+        // while running: the run's scoring and event truth are locked to the
+        // current variant. A ruleset change (mode switch) is allowed because
+        // the presentation must track the new mode; we preserve already-judged,
+        // past, and active event objects so the in-progress score is not
+        // corrupted, and replace the remaining future events with the new
+        // ruleset's timeline.
+        if (target.rulesetId === selectedVariant?.rulesetId) throw dataError("variant_swap_running", "Variants may not change while gameplay is running");
+        const future = timelineFor(target, requireTimingMapper());
+        const preserved = resolvedEvents.filter((event) => Number(event.centerTimestampMs) < playbackPositionMs || judgedEventIds.has(String(event.eventId)) || activeEventIds.has(String(event.eventId)));
+        const preservedIds = new Set(preserved.map((event) => String(event.eventId)));
+        const preservedTargets = new Set(preserved.flatMap(eventTargetKeys));
+        const replacement = future.filter((event) => Number(event.centerTimestampMs) >= playbackPositionMs && !preservedIds.has(String(event.eventId)) && eventTargetKeys(event).every((key) => !preservedTargets.has(key)));
+        resolvedEvents = Object.freeze([...preserved, ...replacement].sort((left, right) => Number(left.centerTimestampMs) - Number(right.centerTimestampMs) || compareCodePoints(String(left.eventId), String(right.eventId))));
+        selectedVariant = target;
+        renderEvents = projectRenderEvents(resolvedEvents, (event) => modeForEvent(event, target), requireEffectivePalette());
+        publish();
+        return target;
+      }
       selectedVariant = target;
       setResolvedEvents(timelineFor(target, requireTimingMapper()), target);
       publish();
