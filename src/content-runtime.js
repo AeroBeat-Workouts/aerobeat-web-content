@@ -188,14 +188,15 @@ export function createAeroContentRuntime(options = {}) {
       const target = await resolveVariant(requireBoundedString(variantId, "variant_identity_invalid", 256), normalizeModifierSelection(selection), localGeneration);
       checkGeneration(localGeneration);
       if (playbackState === "running") {
-        // A same-ruleset variant swap (difficulty/modifier change) is blocked
-        // while running: the run's scoring and event truth are locked to the
-        // current variant. A ruleset change (mode switch) is allowed because
-        // the presentation must track the new mode; we preserve already-judged,
+        // A same-ruleset variant swap to a DIFFERENT variant (difficulty/modifier
+        // change) is blocked while running: the run's scoring and event truth are
+        // locked to the current variant. Selecting the same variant (no-op) is
+        // allowed. A ruleset change (mode switch) is allowed because the
+        // presentation must track the new mode; we preserve already-judged,
         // past, and active event objects so the in-progress score is not
         // corrupted, and replace the remaining future events with the new
         // ruleset's timeline.
-        if (target.rulesetId === selectedVariant?.rulesetId) throw dataError("variant_swap_running", "Variants may not change while gameplay is running");
+        if (target.rulesetId === selectedVariant?.rulesetId && target.variantId !== selectedVariant?.variantId) throw dataError("variant_swap_running", "Variants may not change while gameplay is running");
         const future = timelineFor(target, requireTimingMapper());
         const preserved = resolvedEvents.filter((event) => Number(event.centerTimestampMs) < playbackPositionMs || judgedEventIds.has(String(event.eventId)) || activeEventIds.has(String(event.eventId)));
         const preservedIds = new Set(preserved.map((event) => String(event.eventId)));
