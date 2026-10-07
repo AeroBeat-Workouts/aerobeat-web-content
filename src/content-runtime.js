@@ -191,14 +191,19 @@ export function createAeroContentRuntime(options = {}) {
         // A same-ruleset variant swap to a DIFFERENT variant (difficulty/modifier
         // change) is blocked while running: the run's scoring and event truth are
         // locked to the current variant. Selecting the same variant (no-op) is
-        // allowed. A ruleset change (mode switch) is allowed because the
-        // presentation must track the new mode; we preserve already-judged,
-        // past, and active event objects so the in-progress score is not
-        // corrupted, and replace the remaining future events with the new
-        // ruleset's timeline.
+        // allowed. A ruleset change (mode switch, Flow <-> Boxing) is allowed
+        // because the presentation must track the new mode.
         if (target.rulesetId === selectedVariant?.rulesetId && target.variantId !== selectedVariant?.variantId) throw dataError("variant_swap_running", "Variants may not change while gameplay is running");
         const future = timelineFor(target, requireTimingMapper());
-        const preserved = resolvedEvents.filter((event) => Number(event.centerTimestampMs) < playbackPositionMs || judgedEventIds.has(String(event.eventId)) || activeEventIds.has(String(event.eventId)));
+        // A MODE change (Flow <-> Boxing) re-resolves the FULL beat timeline for
+        // the new mode: the old mode's events are structurally incompatible with
+        // the new mode's evaluation path (flow notes vs boxing punches, different
+        // charts), so preserving them would leave the old-mode beats on screen
+        // (equipment changes, beats do not). Same-ruleset no-op swaps keep the
+        // already-judged/past/active objects so the in-progress score is not
+        // corrupted.
+        const modeChanged = selectedVariant !== null && selectedVariant.mode !== target.mode;
+        const preserved = modeChanged ? [] : resolvedEvents.filter((event) => Number(event.centerTimestampMs) < playbackPositionMs || judgedEventIds.has(String(event.eventId)) || activeEventIds.has(String(event.eventId)));
         const preservedIds = new Set(preserved.map((event) => String(event.eventId)));
         const preservedTargets = new Set(preserved.flatMap(eventTargetKeys));
         const replacement = future.filter((event) => Number(event.centerTimestampMs) >= playbackPositionMs && !preservedIds.has(String(event.eventId)) && eventTargetKeys(event).every((key) => !preservedTargets.has(key)));
@@ -227,7 +232,14 @@ export function createAeroContentRuntime(options = {}) {
       const target = await resolveVariant(requireBoundedString(variantId, "variant_identity_invalid", 256), normalizeModifierSelection(selection), localGeneration);
       checkGeneration(localGeneration);
       const future = timelineFor(target, requireTimingMapper());
-      const preserved = resolvedEvents.filter((event) => Number(event.centerTimestampMs) < playbackPositionMs || judgedEventIds.has(String(event.eventId)) || activeEventIds.has(String(event.eventId)));
+      // A MODE change (Flow <-> Boxing) re-resolves the FULL beat timeline for
+      // the new mode: the old mode's events are structurally incompatible with
+      // the new mode's evaluation path, so preserving them would leave the old
+      // mode's beats on screen (equipment changes, beats do not). Same-ruleset
+      // swaps keep the already-judged/past/active objects so the in-progress
+      // score is not corrupted.
+      const modeChanged = selectedVariant !== null && selectedVariant.mode !== target.mode;
+      const preserved = modeChanged ? [] : resolvedEvents.filter((event) => Number(event.centerTimestampMs) < playbackPositionMs || judgedEventIds.has(String(event.eventId)) || activeEventIds.has(String(event.eventId)));
       const preservedIds = new Set(preserved.map((event) => String(event.eventId)));
       const preservedTargets = new Set(preserved.flatMap(eventTargetKeys));
       const replacement = future.filter((event) => Number(event.centerTimestampMs) >= playbackPositionMs && !preservedIds.has(String(event.eventId)) && eventTargetKeys(event).every((key) => !preservedTargets.has(key)));

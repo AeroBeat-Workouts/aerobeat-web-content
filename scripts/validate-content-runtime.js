@@ -289,7 +289,7 @@ const paletteBoxingVariants = paletteRuntime.getSnapshot().variants.filter((vari
 // z7nw — the new-shape package exposes exactly one Boxing variant: the sole collider.
 assert.deepEqual(paletteBoxingVariants.map((variant)=>[variant.recipeId,variant.rulesetId]),[[null,BOXING_COLLIDER_RULESET_ID]],"sole collider variant replaces the legacy four-chart Lanes/Grid matrix for new imports");
 await paletteRuntime.swapFutureVariant(paletteBoxingVariants[0].variantId);
-assert.equal(paletteRuntime[projectionSymbol]().find((event) => event.eventId === preservedPaletteNote?.eventId)?.appearanceColor, "#FF0000", "cross-mode swaps retain appearance for preserved Flow notes");
+assert.equal(paletteRuntime[projectionSymbol]().find((event) => event.eventId === preservedPaletteNote?.eventId), undefined, "a Flow -> Boxing mode change drops the old-Flow beats (the beats reload for the new mode; equipment changing while beats stay the same is the bug this fixes)");
 for(const variant of paletteBoxingVariants){await paletteRuntime.selectVariant(variant.variantId);const events=paletteRuntime[projectionSymbol]().filter((event)=>event.variantId===variant.variantId);assert.deepEqual(events.filter((event)=>Object.hasOwn(event,"appearanceColor")).map((event)=>[event.authoredBeat.type,event.appearanceColor]),boxingColorExpectation("#FF0000","#808080"),`all six canonical punches use deterministic custom hand colors for ${variant.variantId}`);assert.deepEqual(events.filter((event)=>BOXING_FIXED_TYPES.includes(event.authoredBeat.type)).map((event)=>[event.authoredBeat.type,Object.hasOwn(event,"appearanceColor")]),BOXING_FIXED_TYPES.map((type)=>[type,false]),`guard and three Boxing obstacle types remain fixed-color for ${variant.variantId}`);}
 {const variant=paletteBoxingVariants[0];await paletteRuntime.selectVariant(variant.variantId);const privateEvents=paletteRuntime[projectionSymbol](),publicSnapshot=paletteRuntime.getSnapshot();for(const {type} of BOXING_PUNCH_CASES){const event=privateEvents.find((entry)=>entry.authoredBeat.type===type);assert.equal(event?.appearanceColor??"",(type.endsWith("_left")?"#FF0000":"#808080"),`collider ${type} maps the exact custom hand color`);}for(const type of ["guard","squat","weave_left","weave_right"]){const event=privateEvents.find((entry)=>entry.authoredBeat.type===type);assert.equal(Object.hasOwn(event??{},"appearanceColor"),false,`collider ${type} remains fixed-color`);}assert.equal(publicSnapshot.resolvedEvents.some((event)=>Object.hasOwn(event,"appearanceColor")),false,"collider public events omit private appearance");assert.equal(JSON.stringify(publicSnapshot).includes(palettePackage.notePalette.paletteHash)||JSON.stringify(publicSnapshot).includes("#FF0000")||JSON.stringify(publicSnapshot).includes("#808080"),false,"collider public snapshot omits palette provenance and colors");}
 const stalePaletteEvents = paletteRuntime[projectionSymbol]();
@@ -825,6 +825,42 @@ hiddenModifier.charts[0].beats[0].modifier = "crossed_guard";
 // z7nw — collider content projection omits the recipe identity.
 hiddenModifier.charts[0].prototype.contentHash = `sha256:${hashJson({ beats: hiddenModifier.charts[0].beats, sourceHash: hiddenModifier.charts[0].prototype.sourceHash, rulesetId: hiddenModifier.charts[0].prototype.rulesetId })}`;
 await assert.rejects(() => createAeroContentRuntime().loadPackage({ package: hiddenModifier, assets: [{ path: "song.ogg", bytes: audioBytes }] }), hasCode("event_modifier_not_in_identity"));
+
+// --- Mode switch (Flow <-> Boxing) must reload the new mode's beats ----------
+// Regression for Derrick's report: switching gameplay mode changed the
+// equipment (saber <-> glove) but the BEATS stayed the same. The content
+// runtime previously preserved already-judged/past/active event objects across
+// a mode switch (to protect the in-progress score on same-ruleset swaps), which
+// left the old mode's beats on the screen. A mode change re-resolves the FULL
+// new-mode timeline; the old-mode events are structurally incompatible.
+{
+  const modeSwitchRuntime = createAeroContentRuntime();
+  await modeSwitchRuntime.loadPackage({ package: basePackage, packageHash: `sha256:${packageHash}`, assets: [{ path: "song.ogg", bytes: audioBytes }] });
+  const modeSnapshot = modeSwitchRuntime.getSnapshot();
+  const flowModeVariant = modeSnapshot.variants.find((variant) => variant.mode === "flow");
+  const boxingModeVariant = modeSnapshot.variants.find((variant) => variant.mode === "boxing");
+  assert.ok(flowModeVariant && boxingModeVariant, "fixture carries both a Flow and a Boxing variant");
+
+  // Start on Flow, then switch to Boxing while running.
+  await modeSwitchRuntime.selectVariant(flowModeVariant.variantId);
+  const flowEventCount = modeSwitchRuntime.getSnapshot().resolvedEvents.length;
+  assert.ok(flowEventCount > 0, "Flow variant resolves beats");
+  modeSwitchRuntime.setPlaybackState({ state: "running", positionMs: 1000, judgedEventIds: [modeSwitchRuntime.getSnapshot().resolvedEvents[0].eventId], activeEventIds: [] });
+  await modeSwitchRuntime.selectVariant(boxingModeVariant.variantId);
+  const afterModeSwitch = modeSwitchRuntime.getSnapshot();
+  assert.equal(afterModeSwitch.selectedVariant.mode, "boxing", "selected variant is Boxing after the mode switch");
+  assert.ok(afterModeSwitch.resolvedEvents.length > 0, "Boxing mode resolves beats after the switch");
+  assert.equal(afterModeSwitch.resolvedEvents.every((event) => event.variantId === boxingModeVariant.variantId && event.chartId === boxingModeVariant.chartId), true, "a mode switch drops ALL old-Flow beats (including judged/past) and resolves only the new Boxing beats");
+  assert.equal(afterModeSwitch.resolvedEvents.some((event) => event.variantId === flowModeVariant.variantId), false, "no old-Flow beat survives a Flow -> Boxing mode switch");
+
+  // Switch back to Flow: the old Boxing beats must be gone too.
+  modeSwitchRuntime.setPlaybackState({ state: "running", positionMs: 1000, judgedEventIds: [afterModeSwitch.resolvedEvents[0].eventId], activeEventIds: [] });
+  await modeSwitchRuntime.selectVariant(flowModeVariant.variantId);
+  const backToFlow = modeSwitchRuntime.getSnapshot();
+  assert.equal(backToFlow.selectedVariant.mode, "flow", "selected variant is Flow after switching back");
+  assert.equal(backToFlow.resolvedEvents.every((event) => event.variantId === flowModeVariant.variantId && event.chartId === flowModeVariant.chartId), true, "a Boxing -> Flow switch resolves only the new Flow beats");
+  assert.equal(backToFlow.resolvedEvents.some((event) => event.variantId === boxingModeVariant.variantId), false, "no old-Boxing beat survives a Boxing -> Flow mode switch");
+}
 
 console.log("Content runtime unit checks passed.");
 
