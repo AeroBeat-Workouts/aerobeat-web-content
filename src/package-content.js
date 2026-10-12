@@ -639,7 +639,7 @@ function normalizeModifiers(value, authored = false) {
   if (!Array.isArray(value) || value.length > mapModifierIds.length || value.some((entry) => typeof entry !== "string")) throw dataError("modifiers_invalid", "Modifiers must be a bounded string array");
   const result = [...new Set(value)].sort();
   if (!authored && result.includes("crossed_guard")) throw crossedGuardReimportRequired();
-  if (result.some((entry) => !mapModifierIds.includes(/** @type {"no_squats" | "no_weaves" | "any_punch" | "cross_body"} */ (entry)))) throw dataError("modifier_invalid", "Modifier is unsupported");
+  if (result.some((entry) => !(authored && entry === "crossed_guard") && !mapModifierIds.includes(/** @type {"no_squats" | "no_weaves" | "any_punch" | "cross_body"} */ (entry)))) throw dataError("modifier_invalid", "Modifier is unsupported");
   return result;
 }
 /** A signed historical cross requires fresh same-side authoring; never rewrite hash-bound beats. */
