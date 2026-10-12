@@ -1,0 +1,7 @@
+# Remove runtime crossed guard composition
+
+**Status:** approved next-version source work, no live route/release change. Owner `aerobeat-web-content`; Bead `aerobeat-web-assembly-14lb` in assembly ledger (this repo has no Beads database), umbrella assembly `d8b9`, guard `cm3t`, authoring dependency `czna`.
+
+**Diagnosis:** `src/package-content.js:226–230` accepts `crossed_guard` runtime modifier and flips authenticated guard left/right cells after hash verification. Existing package validation accepts old crossed authored beats. The renderer and gameplay scorer then honor those reversed hand targets. This is not merely a tint problem.
+
+**Implementation/acceptance:** Remove crossing from selectable modifier catalog and composition. Strictly reject any verified legacy package/chart or requested modifier that still contains a crossed-guard type, modifier, `guardTarget.crossed`, or reversed player-hand guard cells; return an actionable reimport-required reason (or existing exact equivalent). Do not mutate a signed hash-anchored package in place. Keep ordinary modifiers and all existing hash/asset privacy constraints. Add positive ordinary guard, negative signed legacy crossing and runtime-modifier rejection tests; show same-test fix-disabled RED/restored GREEN. Audit public contract, fixture and README references for intentional compatibility changes. Run package unit/browser gates, commit/push clean source and give assembly exact SHA/tree for pins; authoring `czna` must produce same-side charts before integration.

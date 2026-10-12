@@ -114,8 +114,8 @@ export async function validateRuntimePackage(packageValue, options = {}) {
       if (!rulesetIds.includes(/** @type {"flow_grid_v1" | "flow_colliders_v1" | "boxing_semantic_track_v1" | "boxing_spatial_grid_v1" | "boxing_collider_v1"} */ (rulesetId))) throw dataError("ruleset_invalid", "Boxing ruleset is unsupported");
       if (options.supportedRulesetIds && !options.supportedRulesetIds.includes(rulesetId)) throw dataError("ruleset_unavailable", `Ruleset ${rulesetId} is unavailable`);
       if (options.supportedRecipeIds && !colliderVariant && !options.supportedRecipeIds.includes(/** @type {string} */ (recipeId))) throw dataError("recipe_unavailable", `Recipe ${recipeId} is unavailable`);
-      modifierIds = normalizeModifiers(prototype.modifiers);
-      validateEventModifierIdentity(beats, modifierIds);
+      modifierIds = normalizeModifiers(prototype.modifiers, true);
+      validateEventModifierIdentity(beats, modifierIds, true);
       const sourceHash = requireHashString(prototype.sourceHash, "source_hash_invalid");
       declaredChartHash = requireHashString(prototype.contentHash, "chart_hash_invalid").slice(7);
       // z7nw — the collider content projection omits the recipeId key ENTIRELY, matching authoring exactly.
@@ -165,6 +165,7 @@ export async function validateRuntimePackage(packageValue, options = {}) {
   const packageHashValue = await sha256Hex(canonicalJson(packageRecord));
   const expectedPackageHash = normalizeDeclaredHash(options.declaredPackageHash);
   if (expectedPackageHash && expectedPackageHash !== packageHashValue) throw dataError("package_hash_mismatch", "Song package failed declared hash verification");
+  rejectLegacyCrossedGuards(charts);
   const semanticParityHashValue = await semanticParityHash(packageRecord);
   return Object.freeze({
     package: packageRecord,
@@ -222,12 +223,6 @@ export async function composeRuntimeVariant(base, requestedModifiers, packageId)
         beat.runtimeModifiers = punchModifiers;
         beat.modifier = punchModifiers[0];
       }
-    }
-    if (type === "guard" && modifiers.includes("crossed_guard")) {
-      const target = requireRecord(beat.guardTarget, "guard_target_invalid");
-      beat.guardTarget = { ...target, leftCell: target.rightCell, rightCell: target.leftCell, crossed: true };
-      beat.runtimeModifiers = ["crossed_guard"];
-      beat.modifier = "crossed_guard";
     }
   }
   chartCopy.beats = beats;
@@ -639,15 +634,36 @@ function requireString(value, code) { if (typeof value !== "string" || value.len
 function requireHashString(value, code) { if (typeof value !== "string" || !/^sha256:[0-9a-f]{64}$/u.test(value)) throw dataError(code, "Expected a lowercase SHA-256 hash"); return value; }
 /** @param {unknown} value @returns {string} */
 function normalizeDeclaredHash(value) { if (value === null || value === undefined) return ""; if (typeof value === "string") { if (!/^sha256:[0-9a-f]{64}$/u.test(value)) throw dataError("package_hash_invalid", "Declared package hash is invalid"); return value.slice(7); } if (hasExactDataKeys(value, ["schema", "version", "algorithm", "value"]) && value.schema === "aerobeat/content_hash" && value.version === 1 && value.algorithm === "sha256" && typeof value.value === "string" && /^[0-9a-f]{64}$/u.test(value.value)) return value.value; throw dataError("package_hash_invalid", "Declared package hash is invalid"); }
-/** @param {unknown} value @returns {string[]} */
-function normalizeModifiers(value) {
+/** @param {unknown} value @param {boolean} [authored] @returns {string[]} */
+function normalizeModifiers(value, authored = false) {
   if (!Array.isArray(value) || value.length > mapModifierIds.length || value.some((entry) => typeof entry !== "string")) throw dataError("modifiers_invalid", "Modifiers must be a bounded string array");
   const result = [...new Set(value)].sort();
-  if (result.some((entry) => !mapModifierIds.includes(/** @type {"no_squats" | "no_weaves" | "any_punch" | "crossed_guard" | "cross_body"} */ (entry)))) throw dataError("modifier_invalid", "Modifier is unsupported");
+  if (!authored && result.includes("crossed_guard")) throw crossedGuardReimportRequired();
+  if (result.some((entry) => !mapModifierIds.includes(/** @type {"no_squats" | "no_weaves" | "any_punch" | "cross_body"} */ (entry)))) throw dataError("modifier_invalid", "Modifier is unsupported");
   return result;
 }
-/** @param {readonly unknown[]} beats @param {readonly string[]} identity */
-function validateEventModifierIdentity(beats, identity) {
+/** A signed historical cross requires fresh same-side authoring; never rewrite hash-bound beats. */
+function crossedGuardReimportRequired() { return dataError("crossed_guard_reimport_required", "Crossed guards are retired; reimport the song to generate same-side guard targets before playback"); }
+
+/** @param {readonly unknown[]} charts */
+function rejectLegacyCrossedGuards(charts) {
+  for (const chartValue of charts) {
+    const chart = requireRecord(chartValue, "chart_invalid");
+    if (chart.mode !== "boxing") continue;
+    const prototype = requireRecord(chart.prototype, "prototype_invalid");
+    if (Array.isArray(prototype.modifiers) && prototype.modifiers.includes("crossed_guard")) throw crossedGuardReimportRequired();
+    const beats = requireArray(chart.beats, "chart_beats_invalid");
+    for (const value of beats) {
+      const beat = requireRecord(value, "event_invalid");
+      const target = beat.guardTarget;
+      if (beat.type === "crossed_guard" || beat.modifier === "crossed_guard" || (Array.isArray(beat.runtimeModifiers) && beat.runtimeModifiers.includes("crossed_guard")) ||
+          (beat.type === "guard" && isPlainDataRecord(target) && (target.crossed === true || (Number.isInteger(target.leftCell) && Number(target.leftCell) % 4 > 1) || (Number.isInteger(target.rightCell) && Number(target.rightCell) % 4 < 2)))) throw crossedGuardReimportRequired();
+    }
+  }
+}
+
+/** @param {readonly unknown[]} beats @param {readonly string[]} identity @param {boolean} authored */
+function validateEventModifierIdentity(beats, identity, authored) {
   for (const value of beats) {
     const beat = requireRecord(value, "event_invalid");
     const emitted = [];
@@ -656,8 +672,7 @@ function validateEventModifierIdentity(beats, identity) {
       if (!Array.isArray(beat.runtimeModifiers)) throw dataError("event_modifier_invalid", "Event runtimeModifiers must be an array");
       emitted.push(...beat.runtimeModifiers);
     }
-    if (emitted.some((entry) => typeof entry !== "string" || !identity.includes(entry))) throw dataError("event_modifier_not_in_identity", "Every emitted event modifier must be declared in chart identity");
-    if (beat.type === "guard" && isPlainDataRecord(beat.guardTarget) && beat.guardTarget.crossed === true && !identity.includes("crossed_guard")) throw dataError("crossed_guard_identity_missing", "Crossed guard events require crossed_guard chart identity");
+    if (emitted.some((entry) => typeof entry !== "string" || (!identity.includes(entry) && !(authored && entry === "crossed_guard")))) throw dataError("event_modifier_not_in_identity", "Every emitted event modifier must be declared in chart identity");
   }
 }
 /** @param {string} value */

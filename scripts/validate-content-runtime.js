@@ -563,22 +563,26 @@ await assert.rejects(() => validateRuntimePackage(endPastBoundaryPackage), hasCo
 // z7nw — the new-shape package's sole Boxing variant is the collider.
 const boxing = snapshot.variants.find((variant) => variant.rulesetId === BOXING_COLLIDER_RULESET_ID);
 assert.ok(boxing);
-await runtime.selectVariant(boxing.variantId, { modifierIds: ["no_squats", "crossed_guard", "cross_body"] });
+await runtime.selectVariant(boxing.variantId, { modifierIds: ["no_squats", "cross_body"] });
 snapshot = runtime.getSnapshot();
 assert.equal(snapshot.selectedVariant.ranked, false);
 assert.equal(snapshot.selectedVariant.provenance.kind, "runtime_composite");
-assert.deepEqual(snapshot.selectedVariant.modifierIds, ["cross_body", "crossed_guard", "no_squats"]);
+assert.deepEqual(snapshot.selectedVariant.modifierIds, ["cross_body", "no_squats"]);
 assert.equal(snapshot.resolvedEvents.some((event) => event.authoredBeat.type === "squat"), false);
-const crossed = snapshot.resolvedEvents.find((event) => event.authoredBeat.type === "guard");
-assert.equal(crossed.authoredBeat.guardTarget.crossed, true);
-assert.deepEqual(crossed.authoredBeat.sourceEventIds, ["source-guard"]);
+const ordinaryGuard = snapshot.resolvedEvents.find((event) => event.authoredBeat.type === "guard");
+assert.deepEqual([ordinaryGuard.authoredBeat.guardTarget.leftCell, ordinaryGuard.authoredBeat.guardTarget.rightCell], [0, 3], "ordinary composition keeps same-side guard cells unchanged");
+assert.deepEqual(ordinaryGuard.authoredBeat.sourceEventIds, ["source-guard"]);
+const beforeRetiredSelection = runtime.getSnapshot();
+await assert.rejects(() => runtime.selectVariant(boxing.variantId, { modifierIds: ["crossed_guard"] }), hasCode("crossed_guard_reimport_required"), "retired runtime selection fails with an actionable reimport reason");
+assert.equal(runtime.getSnapshot(), beforeRetiredSelection, "retired selection does not change the published variant or events");
 const boxingRenderEvents=runtime[projectionSymbol]();assert.deepEqual(boxingRenderEvents.filter((event)=>Object.hasOwn(event,"appearanceColor")).map((event)=>[event.authoredBeat.type,event.appearanceColor]),boxingColorExpectation("#2693FF","#39C96B"),"all six canonical Boxing punches receive deterministic fallback colors");assert.deepEqual(boxingRenderEvents.filter((event)=>BOXING_FIXED_TYPES.includes(event.authoredBeat.type)).map((event)=>[event.authoredBeat.type,Object.hasOwn(event,"appearanceColor")]),[["guard",false],["weave_left",false],["weave_right",false]],"Boxing guard and retained body obstacles remain fixed-color under modifiers");assert.equal(snapshot.resolvedEvents.every((event)=>!Object.hasOwn(event,"appearanceColor")),true,"Boxing appearance remains private to the renderer projection");
 const emittedPackage = structuredClone(basePackage);
-emittedPackage.charts[0].prototype.modifiers = ["crossed_guard"];
+emittedPackage.charts[0].prototype.modifiers = ["cross_body"];
 const emittedRuntime = createAeroContentRuntime();
 await emittedRuntime.loadPackage({ package: emittedPackage, assets: [{ path: "song.ogg", bytes: audioBytes }] });
 await emittedRuntime.selectVariant(emittedPackage.charts[0].chartId, { modifierIds: ["no_squats"] });
-assert.deepEqual(emittedRuntime.getSnapshot().selectedVariant.modifierIds, ["crossed_guard", "no_squats"]);
+assert.deepEqual(emittedRuntime.getSnapshot().selectedVariant.modifierIds, ["cross_body", "no_squats"]);
+assert.deepEqual(Object.values(emittedRuntime.getSnapshot().resolvedEvents.find((event) => event.authoredBeat.type === "guard").authoredBeat.guardTarget), [0, 3]);
 
 // z7nw — with a single authored collider variant, the distinct second Boxing identity is a
 // same-base composite: the runtime composes it from the base id plus modifier selection.
@@ -819,12 +823,37 @@ const noncanonicalExport = rewriteAeroMetadata(exportBytes, (metadata) => ({ ...
 const noncanonicalRuntime = createAeroContentRuntime({ persistenceResolver: { async exportPackage() { return noncanonicalExport; } } });
 await assert.rejects(() => noncanonicalRuntime.loadPersistenceHandle(handle), hasCode("aeropkg_asset_path_noncanonical"));
 
-// Emitted modifiers are part of chart identity, not hidden per-event state.
+// Emitted ordinary modifiers remain bound to chart identity, not hidden per-event state.
 const hiddenModifier = structuredClone(basePackage);
-hiddenModifier.charts[0].beats[0].modifier = "crossed_guard";
+hiddenModifier.charts[0].beats[0].modifier = "any_punch";
 // z7nw — collider content projection omits the recipe identity.
 hiddenModifier.charts[0].prototype.contentHash = `sha256:${hashJson({ beats: hiddenModifier.charts[0].beats, sourceHash: hiddenModifier.charts[0].prototype.sourceHash, rulesetId: hiddenModifier.charts[0].prototype.rulesetId })}`;
 await assert.rejects(() => createAeroContentRuntime().loadPackage({ package: hiddenModifier, assets: [{ path: "song.ogg", bytes: audioBytes }] }), hasCode("event_modifier_not_in_identity"));
+
+// A signed legacy crossing must not be silently swapped back: signed chart/package
+// hashes are verified first, then legacy cells, flags, and emitted modifiers require reimport.
+for (const crossing of ["reversed_left", "reversed_right", "crossed_flag", "crossed_type", "crossed_modifier", "crossed_runtime_modifier", "crossed_chart_modifier"]) {
+  const legacy = structuredClone(basePackage);
+  const boxingChart = legacy.charts[0];
+  const guard = boxingChart.beats.find((beat) => beat.type === "guard");
+  if (crossing === "reversed_left") guard.guardTarget.leftCell = 2;
+  if (crossing === "reversed_right") guard.guardTarget.rightCell = 1;
+  if (crossing === "crossed_flag") guard.guardTarget.crossed = true;
+  if (crossing === "crossed_type") guard.type = "crossed_guard";
+  if (crossing === "crossed_modifier") guard.modifier = "crossed_guard";
+  if (crossing === "crossed_runtime_modifier") guard.runtimeModifiers = ["crossed_guard"];
+  if (crossing === "crossed_chart_modifier" || crossing === "crossed_modifier" || crossing === "crossed_runtime_modifier") boxingChart.prototype.modifiers = ["crossed_guard"];
+  boxingChart.prototype.contentHash = `sha256:${hashJson({ beats: boxingChart.beats, sourceHash: boxingChart.prototype.sourceHash, rulesetId: boxingChart.prototype.rulesetId })}`;
+  const signedHash = `sha256:${hashJson(legacy)}`;
+  const rejection = (error) => hasCode("crossed_guard_reimport_required")(error) && /reimport/i.test(error.message);
+  await assert.rejects(() => validateRuntimePackage(legacy, { declaredPackageHash: signedHash }), rejection, `signed historical ${crossing} requires reimport`);
+  const load = createAeroContentRuntime();
+  await assert.rejects(() => load.loadPackage({ package: legacy, packageHash: signedHash, assets: [{ path: "song.ogg", bytes: audioBytes }] }), rejection);
+  assert.equal(load.getSnapshot().state, "error", "invalid historical crossing never becomes ready");
+  assert.equal(load.getSnapshot().resolvedEvents.length, 0, "invalid crossing never publishes targets");
+  assert.deepEqual(legacy.charts[0].beats.find((beat) => beat.eventId === guard.eventId), guard, "rejected signed guard stays untouched");
+  await assert.rejects(() => validateRuntimePackage(legacy, { declaredPackageHash: `sha256:${"f".repeat(64)}` }), hasCode("package_hash_mismatch"), "hash tampering remains a hash failure, not a legacy migration");
+}
 
 // --- Mode switch (Flow <-> Boxing) must reload the new mode's beats ----------
 // Regression for Derrick's report: switching gameplay mode changed the
