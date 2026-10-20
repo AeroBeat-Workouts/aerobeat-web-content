@@ -16,8 +16,10 @@ import { validateSpawnTiming } from "./spawn-timing.js";
 const FLOW_COLLIDERS_RULESET_ID = "flow_colliders_v1";
 /** Retired Flow Grid ruleset, recognized only in historical stored bytes. */
 const FLOW_GRID_RULESET_ID = "flow_grid_v2";
-/** z7nw — the sole newly-created Boxing variant for new imports (single variant, no conversion recipe). */
+/** Keep old no-knee collider identity for stored packages and score history. */
 const BOXING_COLLIDER_RULESET_ID = "boxing_collider_v1";
+/** Newly imported knee-enabled charts have an independent score/ruleset identity. */
+const BOXING_COLLIDER_KNEE_RULESET_ID = "boxing_collider_knee_v1";
 /** Current sole variant; the two-variant legacy bind remains accepted for historical reads. */
 const FLOW_RULESET_VARIANTS = Object.freeze([FLOW_COLLIDERS_RULESET_ID]);
 
@@ -54,8 +56,9 @@ export async function validateRuntimePackage(packageValue, options = {}) {
   const spawnTiming = validateSpawnTiming(packageSource.spawnTiming, bpm);
   validateSpawnTimingTrace(packageRecord.conversionTrace, spawnTiming);
   const charts = requireArray(packageRecord.charts, "charts_invalid");
-  // z7nw — new imports carry Flow + one collider chart; legacy stored packages carry the four-chart matrix.
-  if (charts.length !== 2 && charts.length !== 5) throw dataError("chart_count_invalid", "Package must contain Flow plus either one collider or four legacy Boxing charts");
+  // New imports carry Flow plus distinct no-knee/knee collider charts. Older
+  // single-collider and four-recipe matrix packages remain readable as-is.
+  if (charts.length !== 2 && charts.length !== 3 && charts.length !== 5) throw dataError("chart_count_invalid", "Package must contain Flow plus one or two collider, or four legacy Boxing charts");
   const chartIds = new Set();
   /** @type {RuntimeVariant[]} */
   const variants = [];
@@ -103,7 +106,8 @@ export async function validateRuntimePackage(packageValue, options = {}) {
       requireHashString(prototype.recipeHash, "recipe_hash_invalid");
       requireHashString(prototype.rulesetHash, "ruleset_hash_invalid");
       rulesetId = requireString(prototype.rulesetId, "ruleset_invalid");
-      const colliderVariant = rulesetId === BOXING_COLLIDER_RULESET_ID;
+      validateKneeEvents(beats, rulesetId);
+      const colliderVariant = rulesetId === BOXING_COLLIDER_RULESET_ID || rulesetId === BOXING_COLLIDER_KNEE_RULESET_ID;
       if (colliderVariant) {
         // z7nw — the single collider variant carries no conversion recipe identity at all.
         if (Object.hasOwn(prototype, "recipeId")) throw dataError("recipe_invalid", "Collider Boxing chart must carry no conversion recipe identity");
@@ -111,7 +115,7 @@ export async function validateRuntimePackage(packageValue, options = {}) {
         recipeId = requireString(prototype.recipeId, "recipe_invalid");
         if (!conversionRecipeIds.includes(/** @type {"row_family_balanced_height_v1" | "cut_family_source_height_v1"} */ (recipeId))) throw dataError("recipe_invalid", "Conversion recipe is unsupported");
       }
-      if (!rulesetIds.includes(/** @type {"flow_grid_v1" | "flow_colliders_v1" | "boxing_semantic_track_v1" | "boxing_spatial_grid_v1" | "boxing_collider_v1"} */ (rulesetId))) throw dataError("ruleset_invalid", "Boxing ruleset is unsupported");
+      if (!rulesetIds.includes(/** @type {"flow_grid_v1" | "flow_colliders_v1" | "boxing_semantic_track_v1" | "boxing_spatial_grid_v1" | "boxing_collider_v1" | "boxing_collider_knee_v1"} */ (rulesetId))) throw dataError("ruleset_invalid", "Boxing ruleset is unsupported");
       if (options.supportedRulesetIds && !options.supportedRulesetIds.includes(rulesetId)) throw dataError("ruleset_unavailable", `Ruleset ${rulesetId} is unavailable`);
       if (options.supportedRecipeIds && !colliderVariant && !options.supportedRecipeIds.includes(/** @type {string} */ (recipeId))) throw dataError("recipe_unavailable", `Recipe ${recipeId} is unavailable`);
       modifierIds = normalizeModifiers(prototype.modifiers, true);
@@ -151,14 +155,17 @@ export async function validateRuntimePackage(packageValue, options = {}) {
   }
   if (flowCount !== 1) throw dataError("flow_variant_invalid", "Package must contain exactly one Flow chart");
   validateFlowTraceBinding(packageRecord.conversionTrace, notePalette, flowContentHash, packageSource);
-  // z7nw — shape separation: NEW = sole collider variant and no legacy matrix identity;
-  // LEGACY stored = all four recipe/ruleset combinations and no collider variant. Mixed shapes fail closed.
-  const boxingCharts = charts.filter((chartValue) => isPlainDataRecord(chartValue) && chartValue.mode === "boxing");
-  const colliderCount = boxingCharts.filter((chartValue) => isPlainDataRecord(/** @type {unknown} */ (chartValue).prototype) && /** @type {Readonly<Record<string, unknown>>} */ (chartValue.prototype).rulesetId === BOXING_COLLIDER_RULESET_ID).length;
-  if (colliderCount === 1 && matrix.size === 0 && boxingCharts.length === 1) { /* current new-import shape */ }
-  else if (colliderCount === 0) {
+  // Exactly one no-knee collider remains valid for stored packages; new imports
+  // add exactly one knee-enabled collider. The old four-recipe matrix stays separate.
+  const boxingCharts = /** @type {DataRecord[]} */ (charts.filter((chartValue) => isPlainDataRecord(chartValue) && chartValue.mode === "boxing"));
+  const noKnee = boxingCharts.filter((chartValue) => isPlainDataRecord(chartValue.prototype) && chartValue.prototype.rulesetId === BOXING_COLLIDER_RULESET_ID);
+  const withKnee = boxingCharts.filter((chartValue) => isPlainDataRecord(chartValue.prototype) && chartValue.prototype.rulesetId === BOXING_COLLIDER_KNEE_RULESET_ID);
+  if (charts.length === 3 && noKnee.length === 1 && withKnee.length === 1 && boxingCharts.length === 2 && matrix.size === 0) {
+    validatePairedBoxingTraceBinding(packageRecord.conversionTrace, noKnee[0], withKnee[0]);
+  } else if (charts.length === 2 && noKnee.length === 1 && withKnee.length === 0 && boxingCharts.length === 1 && matrix.size === 0) { /* stored single-collider shape */ }
+  else if (charts.length === 5 && noKnee.length === 0 && withKnee.length === 0 && boxingCharts.length === 4) {
     const expectedMatrix = conversionRecipeIds.flatMap((recipe) => ["boxing_semantic_track_v1", "boxing_spatial_grid_v1"].map((ruleset) => `${recipe}|${ruleset}`));
-    if (!expectedMatrix.every((identity) => matrix.has(identity))) throw dataError("boxing_matrix_incomplete", "Legacy package does not contain all four Boxing prototype variants");
+    if (matrix.size !== 4 || !expectedMatrix.every((identity) => matrix.has(identity))) throw dataError("boxing_matrix_incomplete", "Legacy package does not contain all four Boxing prototype variants");
   } else throw dataError("boxing_shape_mixed", "Boxing charts mix collider and legacy variants; each package shape must be consistent");
   validateSets(packageRecord.sets, chartIds);
   rejectPrivateEvidence(packageRecord);
@@ -283,8 +290,9 @@ async function validatePackageConverterProfile(packageRecord) {
   const traceProfile = await normalizeConverterProfile(trace.converterProfile);
   if (!sameProfile(profile, traceProfile)) throw dataError("converter_profile_trace_mismatch", "Conversion trace profile must exactly match package source provenance");
   const boxing = requireArray(trace.boxing, "converter_profile_boxing_trace_mismatch");
-  // z7nw — new-import packages carry one collider trace; legacy stored packages carry four.
-  if (boxing.length !== 1 && boxing.length !== 4) throw dataError("converter_profile_boxing_trace_mismatch", "Profile-authored packages require one collider or four legacy Boxing trace profiles");
+  // New paired collider imports, prior single-collider packages and legacy
+  // four-chart matrix packages all carry matching profile-authored traces.
+  if (boxing.length !== 1 && boxing.length !== 2 && boxing.length !== 4) throw dataError("converter_profile_boxing_trace_mismatch", "Profile-authored packages require one or two collider or four legacy Boxing trace profiles");
   for (const value of boxing) {
     const boxingTrace = requireRecord(value, "converter_profile_boxing_trace_mismatch");
     const boxingProfile = await normalizeConverterProfile(boxingTrace.converterProfile);
@@ -384,6 +392,39 @@ function validateSets(setsValue, chartIds) {
     setIds.add(setId); linkedCharts.add(chartId);
   }
   if ([...chartIds].some((chartId) => !linkedCharts.has(chartId))) throw dataError("set_reference_missing", "Every chart must have a set reference");
+}
+
+/** @param {unknown} traceValue @param {DataRecord} noKnee @param {DataRecord} withKnee */
+function validatePairedBoxingTraceBinding(traceValue, noKnee, withKnee) {
+  const trace = requireRecord(traceValue, "boxing_trace_invalid");
+  const boxing = requireArray(trace.boxing, "boxing_trace_invalid");
+  if (boxing.length !== 2) throw dataError("boxing_trace_invalid", "Paired Boxing variants require exactly two bound traces");
+  const expected = new Map([noKnee, withKnee].map((chart) => [chart.chartId, chart]));
+  for (const entry of boxing) {
+    const row = requireRecord(entry, "boxing_trace_invalid");
+    const chartId = requireString(row.chartId, "boxing_trace_invalid");
+    const chart = expected.get(chartId);
+    if (!chart) throw dataError("boxing_trace_invalid", "Each Boxing trace must bind exactly one distinct chart");
+    const prototype = requireRecord(chart.prototype, "boxing_trace_invalid");
+    if (row.rulesetId !== prototype.rulesetId || row.contentHash !== prototype.contentHash || row.sourceHash !== prototype.sourceHash || row.difficulty !== chart.difficulty) throw dataError("boxing_trace_invalid", "Paired Boxing trace identity must match the authored chart");
+    expected.delete(chartId);
+  }
+  if (expected.size !== 0) throw dataError("boxing_trace_invalid", "Every paired Boxing chart requires one trace");
+}
+
+/** @param {readonly unknown[]} beats @param {string} rulesetId */
+function validateKneeEvents(beats, rulesetId) {
+  for (const event of beats) {
+    const beat = requireRecord(event, "event_invalid");
+    if (beat.type !== "knee_left" && beat.type !== "knee_right") continue;
+    if (rulesetId !== BOXING_COLLIDER_KNEE_RULESET_ID) throw dataError("knee_ruleset_invalid", "Only the knee-enabled collider ruleset may author knee events");
+    if (!hasExactDataKeys(beat, ["start", "type", "eventId", "sourceEventIds", "spatialTarget", "timingWindowMs", "evidenceFreshnessMs"])) throw dataError("knee_event_invalid", "Knee event must contain only exact authored gameplay fields");
+    const target = requireRecord(beat.spatialTarget, "knee_event_invalid");
+    const cell = beat.type === "knee_left" ? 9 : 10;
+    const column = cell % 4;
+    const expected = [4, 5].flatMap((row) => [row * 8 + column * 2, row * 8 + column * 2 + 1, row * 8 + (beat.type === "knee_left" ? column * 2 + 2 : column * 2 - 1)]);
+    if (!hasExactDataKeys(target, ["targetCell", "acceptedSubcells"]) || target.targetCell !== cell || !Array.isArray(target.acceptedSubcells) || target.acceptedSubcells.length === 0 || target.acceptedSubcells.length > expected.length || target.acceptedSubcells.some((subcell) => !Number.isInteger(subcell) || !expected.includes(subcell)) || new Set(target.acceptedSubcells).size !== target.acceptedSubcells.length || typeof beat.timingWindowMs !== "number" || !Number.isFinite(beat.timingWindowMs) || beat.timingWindowMs <= 0 || typeof beat.evidenceFreshnessMs !== "number" || !Number.isFinite(beat.evidenceFreshnessMs) || beat.evidenceFreshnessMs <= 0) throw dataError("knee_event_invalid", "Knee event must target the matching lowest-row side with valid measured timing");
+  }
 }
 
 /** @param {readonly unknown[]} beats @param {boolean} boxing @param {(beat:number)=>number} beatToTimelineMs */

@@ -71,6 +71,48 @@ assert.deepEqual(successorBoxingVariants.map((variant) => [variant.variantId, va
   [`ab-chart-${successorFlowChart.chartId.replace(/^ab-chart-/, "").replace(/-flow-easy$/, "-boxing-collider-easy")}`, BOXING_COLLIDER_RULESET_ID, null, true, false]
 ]);
 assert.equal(Object.hasOwn(successorBoxingVariants[0].chart.prototype, "recipeId"), false, "new-shape collider prototype carries no conversion recipe identity");
+// New v6 packages add a second, independent knee-enabled Boxing chart. Keep
+// this older single-collider fixture above unchanged to guard stored reads.
+const paired = structuredClone(successorFixture.package);
+const noKneeChart = paired.charts.find((chart) => chart.mode === "boxing");
+const kneeChart = structuredClone(noKneeChart);
+kneeChart.chartId = noKneeChart.chartId.replace("-boxing-collider-", "-boxing-collider-knee-");
+kneeChart.prototype.rulesetId = "boxing_collider_knee_v1";
+kneeChart.prototype.rulesetHash = `sha256:${hashJson({ contractId: kneeChart.prototype.contractId, rulesetId: kneeChart.prototype.rulesetId, version: kneeChart.prototype.rulesetVersion })}`;
+const oldBeat = kneeChart.beats[0];
+kneeChart.beats[0] = { start: oldBeat.start, type: "knee_left", eventId: "knee-fixture-left", sourceEventIds: oldBeat.sourceEventIds, spatialTarget: { targetCell: 9, acceptedSubcells: [34, 35, 42, 43] }, timingWindowMs: 180, evidenceFreshnessMs: 150 };
+kneeChart.prototype.contentHash = `sha256:${hashJson({ beats: kneeChart.beats, sourceHash: kneeChart.prototype.sourceHash, rulesetId: kneeChart.prototype.rulesetId })}`;
+paired.charts.splice(1, 0, kneeChart);
+paired.sets.push({ ...paired.sets[0], setId: paired.sets[0].setId.replace("-boxing-collider-", "-boxing-collider-knee-"), chartId: kneeChart.chartId });
+paired.conversionTrace.boxing.push({ ...structuredClone(paired.conversionTrace.boxing[0]), chartId: kneeChart.chartId, rulesetId: kneeChart.prototype.rulesetId, contentHash: kneeChart.prototype.contentHash });
+const pairedResult = await validateRuntimePackage(paired);
+assert.deepEqual(pairedResult.variants.filter((variant) => variant.mode === "boxing").map((variant) => variant.rulesetId), ["boxing_collider_v1", "boxing_collider_knee_v1"]);
+assert.notEqual(pairedResult.variants[0].scoreIdentityHash.value, pairedResult.variants[1].scoreIdentityHash.value, "knee and no-knee cannot share score identity");
+assert.equal(pairedResult.variants.filter((variant) => variant.mode === "flow").length, 1);
+const pairedRuntime = createAeroContentRuntime();
+paired.song.audio = { filePath: "song.ogg", contentHash: `sha256:${audioHash}` };
+await pairedRuntime.loadPackage({ package: paired, assets: [{ path: "song.ogg", bytes: audioBytes, hash: `sha256:${audioHash}` }] });
+assert.equal(pairedRuntime.getSnapshot().variants.length, 3, "new package loads one Flow and two distinct Boxing variants");
+await pairedRuntime.selectVariant(kneeChart.chartId);
+assert.equal(pairedRuntime.getSnapshot().selectedVariant.rulesetId, "boxing_collider_knee_v1");
+assert.equal(pairedRuntime.getSnapshot().resolvedEvents.some((event) => event.authoredBeat.type === "knee_left"), true, "selected knee chart exposes a real authored knee event");
+await pairedRuntime.selectVariant(noKneeChart.chartId);
+assert.equal(pairedRuntime.getSnapshot().selectedVariant.rulesetId, "boxing_collider_v1");
+assert.equal(pairedRuntime.getSnapshot().resolvedEvents.some((event) => event.authoredBeat.type.startsWith("knee_")), false, "old Boxer chart cannot inherit knee events from the other variant");
+pairedRuntime.destroy();
+for (const [mutate, code] of [
+  [(value) => { value.charts[1].prototype.rulesetId = "boxing_collider_v1"; }, "knee_ruleset_invalid"],
+  [(value) => { value.charts[1].beats[0].type = "knee_right"; }, "knee_event_invalid"],
+  [(value) => { value.charts[1].beats[0].spatialTarget.targetCell = 10; }, "knee_event_invalid"],
+  [(value) => { value.charts[0].beats[0].type = "knee_left"; }, "knee_ruleset_invalid"],
+  [(value) => { value.conversionTrace.boxing.pop(); }, "boxing_trace_invalid"],
+  [(value) => { value.conversionTrace.boxing[1].chartId = value.conversionTrace.boxing[0].chartId; }, "boxing_trace_invalid"],
+  [(value) => { value.sets[2].setId = value.sets[0].setId; }, "set_reference_invalid"]
+]) {
+  const tampered = structuredClone(paired);
+  mutate(tampered);
+  await assert.rejects(() => validateRuntimePackage(tampered), hasCode(code), `paired package rejects ${code}`);
+}
 const compositeModifiers = ["obstacle_visual_only"];
 const [successorColliderComposite, repeatedColliderComposite] = await Promise.all([
   composeRuntimeVariant(successorFlowVariant, compositeModifiers, successorValidation.packageId),
