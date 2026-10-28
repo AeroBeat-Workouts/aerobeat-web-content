@@ -15,6 +15,7 @@ import {
   maximumAuthoredTimelineMs,
   validateRuntimePackage
 } from "../src/index.js";
+import { maximumObstaclesPerChart } from "@aerobeat/web-contracts/obstacle-contracts";
 import { parseAeroPackage } from "../src/assets.js";
 import { cloneFrozenData } from "../src/runtime-data.js";
 
@@ -540,9 +541,11 @@ const maskMismatchPackage = structuredClone(basePackage);
 maskMismatchPackage.charts.find((chart) => chart.mode === "flow").beats = [{ start: 1, end: 2, type: "obstacle", sourceGeometry, gameplayGeometry, gridMask: [1] }];
 rehashFlow(maskMismatchPackage);
 await assert.rejects(() => validateRuntimePackage(maskMismatchPackage), hasCode("flow_obstacle_invalid"));
-// The Flow obstacle admission cap is 512 per chart (contracts `maximumObstaclesPerChart`).
+// The Flow obstacle admission cap is contracts `maximumObstaclesPerChart` (4,096 since
+// 0.0.148). A real human-made map measured 1,091 normalized walls, so the exact bound
+// admits it and only one more wall is rejected.
 const tooManyObstacles = structuredClone(basePackage);
-tooManyObstacles.charts.find((chart) => chart.mode === "flow").beats = Array.from({ length: 513 }, (_, index) => ({ start: index / 4, end: index / 4 + 0.5, type: "obstacle", sourceGeometry, gameplayGeometry, gridMask: [1,5,9] }));
+tooManyObstacles.charts.find((chart) => chart.mode === "flow").beats = Array.from({ length: maximumObstaclesPerChart + 1 }, (_, index) => ({ start: index / 4, end: index / 4 + 0.5, type: "obstacle", sourceGeometry, gameplayGeometry, gridMask: [1,5,9] }));
 rehashFlow(tooManyObstacles);
 await assert.rejects(() => validateRuntimePackage(tooManyObstacles), hasCode("flow_obstacle_limit_exceeded"));
 const exactObstacleLimit = structuredClone(tooManyObstacles);
